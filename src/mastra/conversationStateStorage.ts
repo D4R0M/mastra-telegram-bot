@@ -1,6 +1,10 @@
 import { getPool } from "../db/client.js";
-import type { PoolClient } from "pg";
 import type { ConversationState } from "./commandParser";
+
+export interface ConversationStateResult {
+  state: ConversationState | undefined;
+  expired: boolean;
+}
 
 // ===============================
 // Conversation State Storage
@@ -25,7 +29,7 @@ const stateTableReady = ensureStateTable();
 // Get conversation state for a user
 export async function getConversationState(
   userId: string,
-): Promise<ConversationState | undefined> {
+): Promise<ConversationStateResult> {
   await stateTableReady;
   const pool = getPool();
 
@@ -42,19 +46,17 @@ export async function getConversationState(
       if (state.lastMessageTime) {
         const timeDiff = Date.now() - state.lastMessageTime;
         if (timeDiff > 5 * 60 * 1000) {
-          // State expired, clear it
-          await clearConversationState(userId);
-          return undefined;
+          return { state: undefined, expired: true };
         }
       }
 
-      return state;
+      return { state, expired: false };
     }
 
-    return undefined;
+    return { state: undefined, expired: false };
   } catch (error) {
     console.error("Error getting conversation state:", error);
-    return undefined;
+    return { state: undefined, expired: false };
   }
 }
 

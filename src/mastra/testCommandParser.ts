@@ -27,7 +27,14 @@ async function runTest(
   }
   
   try {
-    const result = await processCommand(message, userId, 'test_chat', state, mockMastra);
+    const result = await processCommand(
+      message,
+      userId,
+      'test_chat',
+      state,
+      mockMastra,
+      false,
+    );
     console.log(`\nResponse:\n${result.response}`);
     if (result.conversationState) {
       console.log(`\nNew State:`, result.conversationState);
