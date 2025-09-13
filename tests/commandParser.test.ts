@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../src/db/client.ts', () => ({
+  getPool: () => ({ query: vi.fn() }),
+}));
+
 import { parseCommand } from '../src/mastra/commandParser.ts';
 
 describe('parseCommand', () => {

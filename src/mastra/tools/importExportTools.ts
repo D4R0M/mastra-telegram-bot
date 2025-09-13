@@ -16,35 +16,36 @@ interface CSVCard {
 
 // Helper function to parse CSV data
 function parseCSV(csvData: string): string[][] {
-  const lines = csvData.trim().split('\n');
+  const lines = csvData.trim().split(/\r?\n/);
   const result: string[][] = [];
-  
+
   for (const line of lines) {
-    // Simple CSV parsing - handles quoted fields with commas
     const fields: string[] = [];
-    let currentField = '';
+    let currentField = "";
     let inQuotes = false;
-    
+
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
-      
-      if (char === '"' && (i === 0 || line[i - 1] === ',')) {
-        inQuotes = true;
-      } else if (char === '"' && inQuotes && (i + 1 === line.length || line[i + 1] === ',')) {
-        inQuotes = false;
+
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          currentField += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (char === ',' && !inQuotes) {
         fields.push(currentField.trim());
-        currentField = '';
+        currentField = "";
       } else {
         currentField += char;
       }
     }
-    
-    // Add the last field
+
     fields.push(currentField.trim());
     result.push(fields);
   }
-  
+
   return result;
 }
 
