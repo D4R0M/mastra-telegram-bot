@@ -27,7 +27,6 @@ import { importCSVTool, exportCSVTool, previewCSVTool } from './tools/importExpo
 import { getUserSettingsTool, updateSessionSettingsTool, updateAlgorithmSettingsTool, updateReminderSettingsAdvancedTool, resetSettingsTool } from './tools/settingsTools.js';
 import { getDueCardsStatsTool, getRetentionStatsTool, getStreakStatsTool, getEaseHistogramTool, getComprehensiveStatsTool } from './tools/statisticsTools.js';
 import { vocabularyWorkflow } from './workflows/vocabularyWorkflow.js';
-import { registerTelegramTrigger } from '../triggers/telegramTriggers.js';
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -70,28 +69,16 @@ class ProductionPinoLogger extends MastraLogger {
   }
 }
 
-// Initialize database conditionally - only if DATABASE_URL is available
+// Initialize database before creating Mastra instance
+// Only run migrations if DATABASE_URL exists
 if (process.env.DATABASE_URL) {
-  try {
-    await runMigrations({
-      info: (msg: string, data?: any) => console.log('🔧 [DB Migration]', msg, data ? JSON.stringify(data) : ''),
-      error: (msg: string, data?: any) => console.error('🔥 [DB Migration]', msg, data ? JSON.stringify(data) : '')
-    });
-    console.log('✅ [DB Migration] Database migrations completed successfully');
-  } catch (error) {
-    console.error('❌ [DB Migration] Failed to run migrations:', error);
-    if (process.env.NODE_ENV === 'production') {
-      console.error('❌ [DB Migration] Database migrations required in production');
-      process.exit(1);
-    }
-    console.warn('⚠️ [DB Migration] Continuing without database in development mode');
-  }
+  await runMigrations({
+    info: (msg: string, data?: any) => console.log('🔧 [DB Migration]', msg, data ? JSON.stringify(data) : ''),
+    error: (msg: string, data?: any) => console.error('🔥 [DB Migration]', msg, data ? JSON.stringify(data) : '')
+  });
+  console.log('✅ [DB Migration] Database migrations completed successfully');
 } else {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('❌ DATABASE_URL is required in production');
-    process.exit(1);
-  }
-  console.warn('⚠️ DATABASE_URL not set - database features will not work');
+  console.warn('⚠️ [DB Migration] DATABASE_URL not set, skipping migrations');
 }
 
 export const mastra = new Mastra({
@@ -180,8 +167,8 @@ export const mastra = new Mastra({
       {
         path: "/health",
         method: "GET",
-        createHandler: async () => (c) => {
-          return c.json({ status: "ok" });
+        createHandler: async () => {
+          return (c) => c.json({ status: "ok" });
         },
       },
       // This API route is used to register the Mastra workflow (inngest function) on the inngest server
@@ -189,205 +176,220 @@ export const mastra = new Mastra({
         path: "/api/inngest",
         method: "ALL",
         createHandler: async ({ mastra }) => inngestServe({ mastra, inngest }),
-        // The inngestServe function integrates Mastra workflows with Inngest by:
-        // 1. Creating Inngest functions for each workflow with unique IDs (workflow.${workflowId})
-        // 2. Setting up event handlers that:
-        //    - Generate unique run IDs for each workflow execution
-        //    - Create an InngestExecutionEngine to manage step execution
-        //    - Handle workflow state persistence and real-time updates
-        // 3. Establishing a publish-subscribe system for real-time monitoring
-        //    through the workflow:${workflowId}:${runId} channel
       },
-      // Telegram trigger for vocabulary learning bot with single-user access control
-      ...registerTelegramTrigger({
-        triggerType: "telegram/message",
-        handler: async (mastra, triggerInfo) => {
-          const logger = mastra.getLogger();
-          const { payload } = triggerInfo;
-
-          // Handle callback queries (button presses)
-          if (payload?.callback_query) {
-            const callbackQuery = payload.callback_query;
-            const callbackData = callbackQuery.data;
-            const chatId = callbackQuery.message?.chat?.id?.toString() || '';
-            const messageId = callbackQuery.message?.message_id?.toString();
-            const callbackQueryId = callbackQuery.id;
+      // Telegram webhook endpoint
+      {
+        path: "/webhooks/telegram/action",
+        method: "POST",
+        createHandler: async ({ mastra }) => {
+          return async (c) => {
+            const logger = mastra.getLogger();
             
-            logger?.info('🎯 [Telegram Trigger] Received callback query:', {
-              callbackData,
-              chatId,
-              messageId,
-              callbackQueryId
-            });
+            // Validate token at request time
+            if (!process.env.TELEGRAM_BOT_TOKEN) {
+              logger?.error("❌ [Telegram] TELEGRAM_BOT_TOKEN missing");
+              return c.text("Configuration Error", 500);
+            }
 
-            // Process grade button press
-            if (callbackData?.startsWith('grade:')) {
-              const [_, gradeStr, cardId] = callbackData.split(':');
-              const grade = parseInt(gradeStr);
-              const owner_id = chatId;
-              
-              try {
-                // Import submit review tool
-                const { submitReviewTool } = await import('./tools/reviewTools.js');
-                const { getConversationState, saveConversationState } = await import('./conversationStateStorage.js');
-                const { buildToolExecCtx } = await import('./context.js');
+            try {
+              const payload = await c.req.json();
+
+              logger?.info("📝 [Telegram] Received", { 
+                type: payload?.message ? 'message' : payload?.callback_query ? 'callback' : 'unknown',
+                chatId: payload?.message?.chat?.id || payload?.callback_query?.message?.chat?.id,
+                userId: payload?.message?.from?.id || payload?.callback_query?.from?.id
+              });
+
+              // Handle callback queries (button presses)
+              if (payload?.callback_query) {
+                const callbackQuery = payload.callback_query;
+                const callbackData = callbackQuery.data;
+                const chatId = callbackQuery.message?.chat?.id?.toString() || '';
+                const messageId = callbackQuery.message?.message_id?.toString();
+                const callbackQueryId = callbackQuery.id;
                 
-                // Get conversation state to get session data
-                const state = await getConversationState(owner_id);
-                
-                if (state?.mode === 'review_session' && state.data) {
-                  // Submit the review
-                  const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, { requestId: owner_id });
-                  const result = await submitReviewTool.execute({
-                    context: {
-                      owner_id,
-                      card_id: cardId,
-                      start_time: state.data.start_time || Date.now() - 10000,
-                      grade,
-                      session_id: state.data.session_id
-                    },
-                    runtimeContext,
-                    tracingContext,
-                    mastra
-                  });
+                logger?.info('🎯 [Telegram Trigger] Received callback query:', {
+                  callbackData,
+                  chatId,
+                  messageId,
+                  callbackQueryId
+                });
+
+                // Process grade button press
+                if (callbackData?.startsWith('grade:')) {
+                  const [_, gradeStr, cardId] = callbackData.split(':');
+                  const grade = parseInt(gradeStr);
+                  const owner_id = chatId;
                   
-                  // Answer the callback query to remove loading state
-                  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-                  if (TELEGRAM_BOT_TOKEN) {
-                    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        callback_query_id: callbackQueryId,
-                        text: `Grade ${grade} saved ✓`
-                      })
-                    });
+                  try {
+                    // Import submit review tool
+                    const { submitReviewTool } = await import('./tools/reviewTools.js');
+                    const { getConversationState, saveConversationState } = await import('./conversationStateStorage.js');
+                    const { buildToolExecCtx } = await import('./context.js');
                     
-                    // Update the message to remove keyboard and show saved status
-                    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageReplyMarkup`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        chat_id: chatId,
-                        message_id: messageId,
-                        reply_markup: { inline_keyboard: [] }
-                      })
-                    });
-                  }
-                  
-                  // Check if there are more cards and send the next one
-                  const nextIndex = (state.data.current_index || 1) + 1;
-                  const hasMoreCards = state.data.all_cards && nextIndex <= state.data.all_cards.length;
-                  
-                  if (hasMoreCards) {
-                    const nextCard = state.data.all_cards[nextIndex - 1];
+                    // Get conversation state to get session data
+                    const state = await getConversationState(owner_id);
                     
-                    // Update state for next card
-                    await saveConversationState(owner_id, {
-                      mode: 'review_session',
-                      step: 1,
-                      data: {
-                        ...state.data,
-                        current_card: nextCard,
-                        current_index: nextIndex,
-                        start_time: Date.now()
+                    if (state?.mode === 'review_session' && state.data) {
+                      // Submit the review
+                      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, { requestId: owner_id });
+                      const result = await submitReviewTool.execute({
+                        context: {
+                          owner_id,
+                          card_id: cardId,
+                          start_time: state.data.start_time || Date.now() - 10000,
+                          grade,
+                          session_id: state.data.session_id
+                        },
+                        runtimeContext,
+                        tracingContext,
+                        mastra
+                      });
+                      
+                      // Answer the callback query to remove loading state
+                      const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+                      if (TELEGRAM_BOT_TOKEN) {
+                        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            callback_query_id: callbackQueryId,
+                            text: `Grade ${grade} saved ✓`
+                          })
+                        });
+                        
+                        // Update the message to remove keyboard and show saved status
+                        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageReplyMarkup`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            message_id: messageId,
+                            reply_markup: { inline_keyboard: [] }
+                          })
+                        });
                       }
-                    });
-                    
-                    // Send next card
-                    const run = await mastra.getWorkflow("vocabularyWorkflow").createRunAsync();
-                    await run.start({
-                      inputData: {
-                        message: '__next_card__', // Special indicator for next card
-                        threadId: `telegram_${chatId}_${Date.now()}`,
-                        owner_id,
-                        chatId,
-                        messageId: undefined
+                      
+                      // Check if there are more cards and send the next one
+                      const nextIndex = (state.data.current_index || 1) + 1;
+                      const hasMoreCards = state.data.all_cards && nextIndex <= state.data.all_cards.length;
+                      
+                      if (hasMoreCards) {
+                        const nextCard = state.data.all_cards[nextIndex - 1];
+                        
+                        // Update state for next card
+                        await saveConversationState(owner_id, {
+                          mode: 'review_session',
+                          step: 1,
+                          data: {
+                            ...state.data,
+                            current_card: nextCard,
+                            current_index: nextIndex,
+                            start_time: Date.now()
+                          }
+                        });
+                        
+                        // Send next card
+                        const run = await mastra.getWorkflow("vocabularyWorkflow").createRunAsync();
+                        await run.start({
+                          inputData: {
+                            message: '__next_card__', // Special indicator for next card
+                            threadId: `telegram_${chatId}_${Date.now()}`,
+                            owner_id,
+                            chatId,
+                            messageId: undefined
+                          }
+                        });
+                      } else {
+                        // Session complete
+                        await saveConversationState(owner_id, undefined);
+                        
+                        // Send completion message
+                        const run = await mastra.getWorkflow("vocabularyWorkflow").createRunAsync();
+                        await run.start({
+                          inputData: {
+                            message: '__session_complete__', // Special indicator for completion
+                            threadId: `telegram_${chatId}_${Date.now()}`,
+                            owner_id,
+                            chatId,
+                            messageId: undefined
+                          }
+                        });
                       }
-                    });
-                  } else {
-                    // Session complete
-                    await saveConversationState(owner_id, undefined);
-                    
-                    // Send completion message
-                    const run = await mastra.getWorkflow("vocabularyWorkflow").createRunAsync();
-                    await run.start({
-                      inputData: {
-                        message: '__session_complete__', // Special indicator for completion
-                        threadId: `telegram_${chatId}_${Date.now()}`,
-                        owner_id,
-                        chatId,
-                        messageId: undefined
-                      }
+                    }
+                  } catch (error) {
+                    logger?.error('❌ [Telegram Trigger] Error handling callback query:', {
+                      error: error instanceof Error ? error.message : String(error),
+                      callbackData,
+                      chatId
                     });
                   }
                 }
+                return c.text("OK", 200);
+              }
+
+              // Handle regular messages
+              logger?.info('📱 [Telegram Trigger] Received message:', {
+                chatId: payload?.message?.chat?.id,
+                messageId: payload?.message?.message_id,
+                userName: payload?.message?.from?.username,
+                messageText: payload?.message?.text?.substring(0, 100) + (payload?.message?.text?.length > 100 ? '...' : '')
+              });
+
+              // Extract message details for workflow
+              const message = payload?.message?.text || '';
+              const chatId = payload?.message?.chat?.id?.toString() || '';
+              const messageId = payload?.message?.message_id?.toString();
+              const threadId = `telegram_${chatId}_${messageId}`;
+              const owner_id = chatId; // Use chat ID as owner_id
+
+              if (!message.trim()) {
+                logger?.warn('⚠️ [Telegram Trigger] Empty message received, skipping');
+                return c.text("OK", 200);
+              }
+
+              try {
+                // Start the vocabulary workflow
+                logger?.info('🚀 [Telegram Trigger] Starting vocabulary workflow:', {
+                  threadId,
+                  owner_id,
+                  chatId,
+                  messageId
+                });
+
+                const run = await mastra.getWorkflow("vocabularyWorkflow").createRunAsync();
+                const result = await run.start({
+                  inputData: {
+                    message,
+                    threadId,
+                    owner_id,
+                    chatId,
+                    messageId
+                  }
+                });
+
+                logger?.info('✅ [Telegram Trigger] Workflow completed successfully:', {
+                  threadId,
+                  status: result?.status
+                });
+
               } catch (error) {
-                logger?.error('❌ [Telegram Trigger] Error handling callback query:', {
+                logger?.error('❌ [Telegram Trigger] Error starting workflow:', {
                   error: error instanceof Error ? error.message : String(error),
-                  callbackData,
+                  threadId,
+                  owner_id,
                   chatId
                 });
               }
+
+              return c.text("OK", 200);
+            } catch (error) {
+              logger?.error("❌ [Telegram] Error handling webhook:", error);
+              return c.text("Internal Server Error", 500);
             }
-            return;
-          }
-
-          // Handle regular messages
-          logger?.info('📱 [Telegram Trigger] Received message:', {
-            chatId: payload?.message?.chat?.id,
-            messageId: payload?.message?.message_id,
-            userName: payload?.message?.from?.username,
-            messageText: payload?.message?.text?.substring(0, 100) + (payload?.message?.text?.length > 100 ? '...' : '')
-          });
-
-          // Extract message details for workflow
-          const message = payload?.message?.text || '';
-          const chatId = payload?.message?.chat?.id?.toString() || '';
-          const messageId = payload?.message?.message_id?.toString();
-          const threadId = `telegram_${chatId}_${messageId}`;
-          const owner_id = chatId; // Use chat ID as owner_id
-
-          if (!message.trim()) {
-            logger?.warn('⚠️ [Telegram Trigger] Empty message received, skipping');
-            return;
-          }
-
-          try {
-            // Start the vocabulary workflow
-            logger?.info('🚀 [Telegram Trigger] Starting vocabulary workflow:', {
-              threadId,
-              owner_id,
-              chatId,
-              messageId
-            });
-
-            const run = await mastra.getWorkflow("vocabularyWorkflow").createRunAsync();
-            const result = await run.start({
-              inputData: {
-                message,
-                threadId,
-                owner_id,
-                chatId,
-                messageId
-              }
-            });
-
-            logger?.info('✅ [Telegram Trigger] Workflow completed successfully:', {
-              threadId,
-              status: result?.status
-            });
-
-          } catch (error) {
-            logger?.error('❌ [Telegram Trigger] Error starting workflow:', {
-              error: error instanceof Error ? error.message : String(error),
-              threadId,
-              owner_id,
-              chatId
-            });
-          }
+          };
         },
-      }),
+      },
     ],
   },
   logger:
