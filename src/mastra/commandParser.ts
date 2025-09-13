@@ -5,6 +5,8 @@ import { submitReviewTool } from "./tools/reviewTools.js";
 import { importCSVTool, previewCSVTool } from "./tools/importExportTools.js";
 import { commandRegistry } from "./commands/index.js";
 import { formatCard } from "./commands/utils.js";
+import { updateSessionSettingsTool } from "./tools/settingsTools.js";
+import { updateReminderSettingsTool } from "./tools/reminderTools.js";
 
 // ===============================
 // Types and Interfaces
@@ -89,6 +91,9 @@ async function handleConversationState(
 
     case "import_csv":
       return handleImportCSVFlow(message, userId, state, mastra);
+
+    case "settings_menu":
+      return handleSettingsMenuFlow(message, userId, state, mastra);
 
     default:
       // Clear unknown state
@@ -705,6 +710,125 @@ async function handleImportCSVFlow(
       parse_mode: "HTML",
     };
   }
+}
+
+// ===============================
+// Settings Menu Flow
+// ===============================
+
+async function handleSettingsMenuFlow(
+  message: string,
+  userId: string,
+  state: ConversationState,
+  mastra?: any,
+): Promise<CommandResponse> {
+  const logger = mastra?.getLogger();
+
+  const action = state.data?.action;
+  const input = message.trim();
+
+  if (state.step === 2 && action === "timezone") {
+    // Validate timezone
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: input });
+    } catch {
+      return {
+        response:
+          "❌ Invalid timezone. Please provide a valid timezone like 'Europe/Stockholm'",
+        conversationState: state,
+        parse_mode: "HTML",
+      };
+    }
+
+    try {
+      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+        requestId: userId,
+      });
+      const result = await updateReminderSettingsTool.execute({
+        context: {
+          user_id: userId,
+          timezone: input,
+        },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+
+      if (result.success) {
+        return {
+          response: `✅ Timezone updated to <b>${input}</b>`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      } else {
+        return {
+          response: `❌ ${result.message}`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      }
+    } catch (error) {
+      logger?.error("❌ [CommandParser] Error updating timezone:", error);
+      return {
+        response: "❌ Error updating timezone. Please try again.",
+        conversationState: undefined,
+        parse_mode: "HTML",
+      };
+    }
+  }
+
+  if (state.step === 2 && action === "session_size") {
+    const size = parseInt(input, 10);
+    if (isNaN(size) || size <= 0) {
+      return {
+        response: "❌ Please enter a valid number for session size",
+        conversationState: state,
+        parse_mode: "HTML",
+      };
+    }
+
+    try {
+      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+        requestId: userId,
+      });
+      const result = await updateSessionSettingsTool.execute({
+        context: {
+          user_id: userId,
+          session_size: size,
+        },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+
+      if (result.success) {
+        return {
+          response: `✅ Session size updated to <b>${size}</b> cards`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      } else {
+        return {
+          response: `❌ ${result.message}`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      }
+    } catch (error) {
+      logger?.error("❌ [CommandParser] Error updating session size:", error);
+      return {
+        response: "❌ Error updating session size. Please try again.",
+        conversationState: undefined,
+        parse_mode: "HTML",
+      };
+    }
+  }
+
+  return {
+    response: "Settings menu expired. Use /settings to open it again.",
+    conversationState: undefined,
+    parse_mode: "HTML",
+  };
 }
 
 // ===============================

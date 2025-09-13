@@ -388,6 +388,120 @@ export const mastra = new Mastra({
                       },
                     );
                   }
+                } else if (callbackData?.startsWith("settings:")) {
+                  const [_, action] = callbackData.split(":");
+                  const owner_id = chatId;
+
+                  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+                  if (TELEGRAM_BOT_TOKEN && messageId) {
+                    const editUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageReplyMarkup`;
+                    await fetch(editUrl, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        chat_id: chatId,
+                        message_id: messageId,
+                        reply_markup: { inline_keyboard: [] },
+                      }),
+                    });
+                  }
+
+                  if (TELEGRAM_BOT_TOKEN) {
+                    const answerUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`;
+                    await fetch(answerUrl, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        callback_query_id: callbackQueryId,
+                      }),
+                    });
+                  }
+
+                  if (action === "toggle_reminders") {
+                    try {
+                      const {
+                        runtimeContext: grRuntime,
+                        tracingContext: grTracing,
+                      } = buildToolExecCtx(mastra, { requestId: owner_id });
+                      const state = await getReminderSettingsTool.execute({
+                        context: { user_id: owner_id },
+                        runtimeContext: grRuntime,
+                        tracingContext: grTracing,
+                        mastra,
+                      });
+
+                      const enabled = !state.settings?.enabled;
+                      const { runtimeContext, tracingContext } =
+                        buildToolExecCtx(mastra, { requestId: owner_id });
+                      await updateReminderSettingsTool.execute({
+                        context: { user_id: owner_id, enabled },
+                        runtimeContext,
+                        tracingContext,
+                        mastra,
+                      });
+
+                      await saveConversationState(owner_id, undefined);
+
+                      if (TELEGRAM_BOT_TOKEN) {
+                        await fetch(
+                          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              chat_id: chatId,
+                              text: `Reminders ${enabled ? "enabled" : "disabled"}`,
+                            }),
+                          },
+                        );
+                      }
+                    } catch (err) {
+                      logger?.error(
+                        "❌ [Telegram Trigger] Error toggling reminders",
+                        err,
+                      );
+                    }
+                  } else if (action === "change_timezone") {
+                    await saveConversationState(owner_id, {
+                      mode: "settings_menu",
+                      step: 2,
+                      data: { action: "timezone" },
+                    });
+                    if (TELEGRAM_BOT_TOKEN) {
+                      await fetch(
+                        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            text: "Please enter your timezone (e.g., Europe/Stockholm):",
+                          }),
+                        },
+                      );
+                    }
+                  } else if (action === "session_size") {
+                    await saveConversationState(owner_id, {
+                      mode: "settings_menu",
+                      step: 2,
+                      data: { action: "session_size" },
+                    });
+                    if (TELEGRAM_BOT_TOKEN) {
+                      await fetch(
+                        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            text: "Enter new session size (1-100):",
+                          }),
+                        },
+                      );
+                    }
+                  }
+
+                  return c.text("OK", 200);
                 }
                 return c.text("OK", 200);
               }
