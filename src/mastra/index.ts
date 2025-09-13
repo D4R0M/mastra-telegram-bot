@@ -408,8 +408,7 @@ export const mastra = new Mastra({
                       );
                     }
 
-                    const TELEGRAM_BOT_TOKEN =
-                      process.env.TELEGRAM_BOT_TOKEN;
+                    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
                     if (TELEGRAM_BOT_TOKEN) {
                       const answerUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`;
                       await fetch(answerUrl, {
@@ -604,11 +603,49 @@ export const mastra = new Mastra({
               });
 
               // Extract message details for workflow
-              const message = payload?.message?.text || "";
+              let message = payload?.message?.text || "";
               const chatId = payload?.message?.chat?.id?.toString() || "";
               const messageId = payload?.message?.message_id?.toString();
               const threadId = `telegram_${chatId}_${messageId}`;
               const owner_id = chatId; // Use chat ID as owner_id
+
+              // If no text but a document is present, try to download its content
+              if (!message.trim() && payload?.message?.document?.file_id) {
+                const fileId = payload.message.document.file_id;
+                const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+                if (TELEGRAM_BOT_TOKEN) {
+                  try {
+                    logger?.info(
+                      "📄 [Telegram Trigger] Fetching document content",
+                    );
+                    const fileInfoRes = await fetch(
+                      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`,
+                    );
+                    const fileInfo = await fileInfoRes.json();
+                    const filePath = fileInfo?.result?.file_path;
+                    if (filePath) {
+                      const fileRes = await fetch(
+                        `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`,
+                      );
+                      message = await fileRes.text();
+                    }
+                  } catch (error) {
+                    logger?.error(
+                      "❌ [Telegram Trigger] Error fetching document:",
+                      {
+                        error:
+                          error instanceof Error
+                            ? error.message
+                            : String(error),
+                      },
+                    );
+                  }
+                } else {
+                  logger?.warn(
+                    "⚠️ [Telegram Trigger] TELEGRAM_BOT_TOKEN missing - cannot download document",
+                  );
+                }
+              }
 
               if (!message.trim()) {
                 logger?.warn(
