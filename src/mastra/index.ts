@@ -20,7 +20,7 @@ import { NonRetriableError } from "inngest";
 import { z } from "zod";
 
 import { sharedPostgresStorage } from "./storage";
-import { inngest, inngestServe } from "./inngest";
+import { inngest, inngestServe, registerCronWorkflow } from "./inngest";
 import { runMigrations } from "../db/migrate.js";
 import {
   addCardTool,
@@ -64,6 +64,7 @@ import {
   getComprehensiveStatsTool,
 } from "./tools/statisticsTools.js";
 import { vocabularyWorkflow } from "./workflows/vocabularyWorkflow.js";
+import { reminderWorkflow } from "./workflows/reminderWorkflow.js";
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -481,6 +482,9 @@ export const mastra = new Mastra({
           level: "info",
         }),
 });
+
+reminderWorkflow.__registerMastra(mastra);
+registerCronWorkflow("*/30 * * * *", reminderWorkflow);
 
 /*  Sanity check 1: Throw an error if there are more than 1 workflows.  */
 // !!!!!! Do not remove this check. !!!!!!
