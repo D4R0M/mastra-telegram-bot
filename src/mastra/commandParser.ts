@@ -833,6 +833,45 @@ async function handleSettingsMenuFlow(
 }
 
 // ===============================
+// Callback Handlers
+// ===============================
+
+export async function handleListCallback(
+  action: string,
+  cardId: string,
+  userId: string,
+  mastra?: any,
+): Promise<CommandResponse> {
+  const logger = mastra?.getLogger();
+
+  if (action === "edit") {
+    const state: ConversationState = {
+      mode: "edit_card",
+      step: 1,
+      data: { card_id: cardId },
+    };
+    return handleEditCardFlow("", userId, state, mastra);
+  }
+
+  if (action === "delete") {
+    const deleteHandler = commandRegistry["/delete"];
+    if (deleteHandler) {
+      return deleteHandler([cardId], cardId, userId, undefined, mastra);
+    }
+    return {
+      response: "❌ Delete command not available",
+      parse_mode: "HTML",
+    };
+  }
+
+  logger?.warn("Unknown list callback action", { action, cardId });
+  return {
+    response: "❌ Unknown action",
+    parse_mode: "HTML",
+  };
+}
+
+// ===============================
 // Main Export Function
 // ===============================
 

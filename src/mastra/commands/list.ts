@@ -39,9 +39,23 @@ export default async function handleListCommand(
         )
         .join("\n\n");
 
+      const inline_keyboard = {
+        inline_keyboard: result.cards.map((card: any) => [
+          {
+            text: "Edit",
+            callback_data: `list:edit:${card.card_id || card.id}`,
+          },
+          {
+            text: "Delete",
+            callback_data: `list:delete:${card.card_id || card.id}`,
+          },
+        ]),
+      };
+
       return {
-        response: `📚 <b>Your Vocabulary Cards (${result.total_found} total)</b>\n\n${cardsList}\n\n<i>Use /edit [id] to edit a card\nUse /delete [id] to remove a card</i>`,
+        response: `📚 <b>Your Vocabulary Cards (${result.total_found} total)</b>\n\n${cardsList}`,
         parse_mode: "HTML",
+        inline_keyboard,
       };
     } else if (result.cards && result.cards.length === 0) {
       return {

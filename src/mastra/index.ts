@@ -38,6 +38,7 @@ import {
   saveConversationState,
 } from "./conversationStateStorage.js";
 import { buildToolExecCtx } from "./context.js";
+import { handleListCallback } from "./commandParser.js";
 import {
   getReminderSettingsTool,
   updateReminderSettingsTool,
@@ -388,6 +389,92 @@ export const mastra = new Mastra({
                       },
                     );
                   }
+                } else if (callbackData?.startsWith("list:")) {
+                  const [_, action, cardId] = callbackData.split(":");
+                  const owner_id = chatId;
+
+                  try {
+                    const result = await handleListCallback(
+                      action,
+                      cardId,
+                      owner_id,
+                      mastra,
+                    );
+
+                    if (result.conversationState !== undefined) {
+                      await saveConversationState(
+                        owner_id,
+                        result.conversationState,
+                      );
+                    }
+
+                    const TELEGRAM_BOT_TOKEN =
+                      process.env.TELEGRAM_BOT_TOKEN;
+                    if (TELEGRAM_BOT_TOKEN) {
+                      const answerUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`;
+                      await fetch(answerUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          callback_query_id: callbackQueryId,
+                        }),
+                      });
+
+                      if (action === "delete" && messageId) {
+                        const deleteUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteMessage`;
+                        await fetch(deleteUrl, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            message_id: messageId,
+                          }),
+                        });
+
+                        await fetch(
+                          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+                          {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                              chat_id: chatId,
+                              text: result.response,
+                              parse_mode: result.parse_mode || "HTML",
+                            }),
+                          },
+                        );
+                      } else if (action === "edit" && messageId) {
+                        const editUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`;
+                        await fetch(editUrl, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            message_id: messageId,
+                            text: result.response,
+                            parse_mode: result.parse_mode || "HTML",
+                            reply_markup: { inline_keyboard: [] },
+                          }),
+                        });
+                      }
+                    }
+                  } catch (error) {
+                    logger?.error(
+                      "❌ [Telegram Trigger] Error handling list callback:",
+                      {
+                        error:
+                          error instanceof Error
+                            ? error.message
+                            : String(error),
+                        callbackData,
+                        chatId,
+                      },
+                    );
+                  }
+
+                  return c.text("OK", 200);
                 } else if (callbackData?.startsWith("settings:")) {
                   const [_, action] = callbackData.split(":");
                   const owner_id = chatId;
