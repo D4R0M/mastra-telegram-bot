@@ -49,6 +49,7 @@ Successfully created a deterministic command parser module that replaces the AI 
 ### Help & Information
 - `/help` - Show all available commands
 - `/start` - Same as help
+- `/test` - Check how many cards are due (for testing reminders)
 
 ### Command Aliases
 - `/a` → `/add`
