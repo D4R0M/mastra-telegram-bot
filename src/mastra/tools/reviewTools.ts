@@ -1,10 +1,20 @@
 import { createTool } from "@mastra/core/tools";
 import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
-import { getDueCards, createReviewState, updateReviewState, createReviewLog, getReviewState } from "../../db/reviews.js";
+import {
+  getDueCards,
+  createReviewState,
+  updateReviewState,
+  createReviewLog,
+  getReviewState,
+  getReviewStates,
+} from "../../db/reviews.js";
 import { getCardById } from "../../db/cards.js";
 import { calculateSM2 } from "../../db/sm2.js";
-import type { CreateReviewLogData, UpdateReviewStateData } from "../../db/reviews.js";
+import type {
+  CreateReviewLogData,
+  UpdateReviewStateData,
+} from "../../db/reviews.js";
 
 // Get due cards for review
 export const getDueCardsTool = createTool({
@@ -12,38 +22,49 @@ export const getDueCardsTool = createTool({
   description: `Get vocabulary cards that are due for review today, ordered by priority (oldest due date first).`,
   inputSchema: z.object({
     owner_id: z.string().describe("User ID who owns the cards"),
-    limit: z.number().default(10).describe("Maximum number of cards to return for the session"),
-    include_new: z.boolean().default(true).describe("Whether to include new cards that haven't been reviewed yet"),
+    limit: z
+      .number()
+      .default(10)
+      .describe("Maximum number of cards to return for the session"),
+    include_new: z
+      .boolean()
+      .default(true)
+      .describe("Whether to include new cards that haven't been reviewed yet"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
-    cards: z.array(z.object({
-      card_id: z.string(),
-      front: z.string(),
-      back: z.string(),
-      tags: z.array(z.string()),
-      example: z.string().optional(),
-      lang_front: z.string(),
-      lang_back: z.string(),
-      queue: z.string(),
-      due_date: z.string(),
-      repetitions: z.number(),
-      ease_factor: z.number(),
-      lapses: z.number(),
-    })),
+    cards: z.array(
+      z.object({
+        card_id: z.string(),
+        front: z.string(),
+        back: z.string(),
+        tags: z.array(z.string()),
+        example: z.string().optional(),
+        lang_front: z.string(),
+        lang_back: z.string(),
+        queue: z.string(),
+        due_date: z.string(),
+        repetitions: z.number(),
+        ease_factor: z.number(),
+        lapses: z.number(),
+      }),
+    ),
     total_due: z.number(),
     message: z.string(),
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
-    logger?.info('🔧 [GetDueCards] Starting due cards retrieval with params:', context);
+    logger?.info(
+      "🔧 [GetDueCards] Starting due cards retrieval with params:",
+      context,
+    );
 
     try {
       // Get due cards that already have review states
-      logger?.info('📝 [GetDueCards] Fetching due cards from database...');
+      logger?.info("📝 [GetDueCards] Fetching due cards from database...");
       const dueCardsData = await getDueCards(context.owner_id, context.limit);
 
-      const dueCards = dueCardsData.map(item => ({
+      const dueCards = dueCardsData.map((item) => ({
         card_id: item.card.id,
         front: item.card.front,
         back: item.card.back,
@@ -61,72 +82,90 @@ export const getDueCardsTool = createTool({
       // If we need more cards and include_new is true, get new cards without review states
       let newCards: any[] = [];
       if (context.include_new && dueCards.length < context.limit) {
-        logger?.info('📝 [GetDueCards] Need more cards, fetching new cards without review states...');
-        
+        logger?.info(
+          "📝 [GetDueCards] Need more cards, fetching new cards without review states...",
+        );
+
         const remaining = context.limit - dueCards.length;
         const { getCardsByOwner } = await import("../../db/cards.js");
-        
-        // Get cards that don't have review states yet
-        const allCards = await getCardsByOwner(context.owner_id, { limit: remaining * 2 }); // Get extra to filter
-        
-        for (const card of allCards) {
-          if (newCards.length >= remaining) break;
-          
-          // Check if this card already has a review state
-          const existingState = await getReviewState(card.id);
-          if (!existingState) {
-            // Create initial review state for new card
-            const reviewState = await createReviewState({
+
+        // Get candidate cards and fetch existing review states in batch
+        const allCards = await getCardsByOwner(context.owner_id, {
+          limit: remaining * 2,
+        }); // Get extra to filter
+        const existingStates = await getReviewStates(
+          allCards.map((card) => card.id),
+        );
+        const existingMap = new Map(
+          existingStates.map((state) => [state.card_id, state]),
+        );
+
+        const cardsWithoutState = allCards
+          .filter((card) => !existingMap.has(card.id))
+          .slice(0, remaining);
+
+        logger?.info(
+          "📝 [GetDueCards] Creating review states for new cards...",
+          { count: cardsWithoutState.length },
+        );
+
+        const createdStates = await Promise.all(
+          cardsWithoutState.map((card) =>
+            createReviewState({
               card_id: card.id,
               interval_days: 0,
               repetitions: 0,
               ease_factor: 2.5,
-              due_date: new Date().toISOString().split('T')[0], // Due today
-              queue: 'new',
-            });
-            
-            newCards.push({
-              card_id: card.id,
-              front: card.front,
-              back: card.back,
-              tags: card.tags || [],
-              example: card.example,
-              lang_front: card.lang_front,
-              lang_back: card.lang_back,
-              queue: reviewState.queue,
-              due_date: reviewState.due_date,
-              repetitions: reviewState.repetitions,
-              ease_factor: reviewState.ease_factor,
-              lapses: reviewState.lapses,
-            });
-          }
-        }
-        
-        logger?.info('📝 [GetDueCards] Added new cards:', { count: newCards.length });
+              due_date: new Date().toISOString().split("T")[0], // Due today
+              queue: "new",
+            }),
+          ),
+        );
+
+        newCards = cardsWithoutState.map((card, idx) => ({
+          card_id: card.id,
+          front: card.front,
+          back: card.back,
+          tags: card.tags || [],
+          example: card.example,
+          lang_front: card.lang_front,
+          lang_back: card.lang_back,
+          queue: createdStates[idx].queue,
+          due_date: createdStates[idx].due_date,
+          repetitions: createdStates[idx].repetitions,
+          ease_factor: createdStates[idx].ease_factor,
+          lapses: createdStates[idx].lapses,
+        }));
+
+        logger?.info("📝 [GetDueCards] Added new cards:", {
+          count: newCards.length,
+        });
       }
 
       const allCards = [...dueCards, ...newCards];
       const totalDue = allCards.length;
 
-      const message = totalDue === 0 
-        ? "No cards are due for review right now. Great job keeping up with your studies!"
-        : `Found ${totalDue} card${totalDue === 1 ? '' : 's'} ready for review.`;
+      const message =
+        totalDue === 0
+          ? "No cards are due for review right now. Great job keeping up with your studies!"
+          : `Found ${totalDue} card${totalDue === 1 ? "" : "s"} ready for review.`;
 
-      logger?.info('✅ [GetDueCards] Successfully retrieved due cards:', { count: totalDue });
+      logger?.info("✅ [GetDueCards] Successfully retrieved due cards:", {
+        count: totalDue,
+      });
       return {
         success: true,
         cards: allCards,
         total_due: totalDue,
         message,
       };
-
     } catch (error) {
-      logger?.error('❌ [GetDueCards] Error retrieving due cards:', error);
+      logger?.error("❌ [GetDueCards] Error retrieving due cards:", error);
       return {
         success: false,
         cards: [],
         total_due: 0,
-        message: `Error retrieving due cards: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Error retrieving due cards: ${error instanceof Error ? error.message : "Unknown error"}`,
       };
     }
   },
@@ -139,28 +178,35 @@ export const startReviewTool = createTool({
   inputSchema: z.object({
     owner_id: z.string().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card to review"),
-    session_id: z.string().optional().describe("Session ID for tracking review sessions"),
+    session_id: z
+      .string()
+      .optional()
+      .describe("Session ID for tracking review sessions"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
-    card: z.object({
-      id: z.string(),
-      front: z.string(),
-      tags: z.array(z.string()),
-      example: z.string().optional(),
-      lang_front: z.string(),
-      lang_back: z.string(),
-      queue: z.string(),
-      repetitions: z.number(),
-      ease_factor: z.number(),
-      lapses: z.number(),
-    }).optional(),
-    start_time: z.number().describe("Timestamp when review started (for measuring latency)"),
+    card: z
+      .object({
+        id: z.string(),
+        front: z.string(),
+        tags: z.array(z.string()),
+        example: z.string().optional(),
+        lang_front: z.string(),
+        lang_back: z.string(),
+        queue: z.string(),
+        repetitions: z.number(),
+        ease_factor: z.number(),
+        lapses: z.number(),
+      })
+      .optional(),
+    start_time: z
+      .number()
+      .describe("Timestamp when review started (for measuring latency)"),
     message: z.string(),
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
-    logger?.info('🔧 [StartReview] Starting card review with params:', context);
+    logger?.info("🔧 [StartReview] Starting card review with params:", context);
 
     try {
       // Get the card details
@@ -169,14 +215,14 @@ export const startReviewTool = createTool({
         return {
           success: false,
           start_time: Date.now(),
-          message: "Card not found or you don't have permission to review it."
+          message: "Card not found or you don't have permission to review it.",
         };
       }
 
       // Get or create review state
       let reviewState = await getReviewState(context.card_id);
       if (!reviewState) {
-        logger?.info('📝 [StartReview] Creating new review state for card');
+        logger?.info("📝 [StartReview] Creating new review state for card");
         reviewState = await createReviewState({
           card_id: context.card_id,
         });
@@ -184,10 +230,10 @@ export const startReviewTool = createTool({
 
       const startTime = Date.now();
 
-      logger?.info('✅ [StartReview] Review session started:', { 
-        card_id: context.card_id, 
+      logger?.info("✅ [StartReview] Review session started:", {
+        card_id: context.card_id,
         front: card.front,
-        queue: reviewState.queue 
+        queue: reviewState.queue,
       });
 
       return {
@@ -205,15 +251,14 @@ export const startReviewTool = createTool({
           lapses: reviewState.lapses,
         },
         start_time: startTime,
-        message: `Review started! Try to recall: "${card.front}"`
+        message: `Review started! Try to recall: "${card.front}"`,
       };
-
     } catch (error) {
-      logger?.error('❌ [StartReview] Error starting review:', error);
+      logger?.error("❌ [StartReview] Error starting review:", error);
       return {
         success: false,
         start_time: Date.now(),
-        message: `Error starting review: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Error starting review: ${error instanceof Error ? error.message : "Unknown error"}`,
       };
     }
   },
@@ -226,44 +271,63 @@ export const submitReviewTool = createTool({
   inputSchema: z.object({
     owner_id: z.string().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card being reviewed"),
-    grade: z.number().min(0).max(5).describe("Grade: 0=total blackout, 1=incorrect but remembered, 2=incorrect but easy, 3=correct but difficult, 4=correct with hesitation, 5=perfect recall"),
-    start_time: z.number().describe("Timestamp when review started (for measuring latency)"),
-    session_id: z.string().optional().describe("Session ID for tracking review sessions"),
+    grade: z
+      .number()
+      .min(0)
+      .max(5)
+      .describe(
+        "Grade: 0=total blackout, 1=incorrect but remembered, 2=incorrect but easy, 3=correct but difficult, 4=correct with hesitation, 5=perfect recall",
+      ),
+    start_time: z
+      .number()
+      .describe("Timestamp when review started (for measuring latency)"),
+    session_id: z
+      .string()
+      .optional()
+      .describe("Session ID for tracking review sessions"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
-    card: z.object({
-      id: z.string(),
-      front: z.string(),
-      back: z.string(),
-      tags: z.array(z.string()),
-      example: z.string().optional(),
-      lang_front: z.string(),
-      lang_back: z.string(),
-    }).optional(),
-    review_result: z.object({
-      grade: z.number(),
-      previous_ease: z.number(),
-      new_ease: z.number(),
-      previous_interval: z.number(),
-      new_interval: z.number(),
-      previous_repetitions: z.number(),
-      new_repetitions: z.number(),
-      due_date: z.string(),
-      latency_ms: z.number(),
-    }).optional(),
+    card: z
+      .object({
+        id: z.string(),
+        front: z.string(),
+        back: z.string(),
+        tags: z.array(z.string()),
+        example: z.string().optional(),
+        lang_front: z.string(),
+        lang_back: z.string(),
+      })
+      .optional(),
+    review_result: z
+      .object({
+        grade: z.number(),
+        previous_ease: z.number(),
+        new_ease: z.number(),
+        previous_interval: z.number(),
+        new_interval: z.number(),
+        previous_repetitions: z.number(),
+        new_repetitions: z.number(),
+        due_date: z.string(),
+        latency_ms: z.number(),
+      })
+      .optional(),
     message: z.string(),
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
-    logger?.info('🔧 [SubmitReview] Starting review submission with params:', context);
+    logger?.info(
+      "🔧 [SubmitReview] Starting review submission with params:",
+      context,
+    );
 
     try {
       // Validate grade
       if (context.grade < 0 || context.grade > 5) {
         return {
           success: false,
-          message: "Grade must be between 0 and 5. Please provide a valid grade."
+          message:
+            "Grade must be between 0 and 5. Please provide a valid grade.",
         };
       }
 
@@ -272,7 +336,7 @@ export const submitReviewTool = createTool({
       if (!card) {
         return {
           success: false,
-          message: "Card not found or you don't have permission to review it."
+          message: "Card not found or you don't have permission to review it.",
         };
       }
 
@@ -281,7 +345,8 @@ export const submitReviewTool = createTool({
       if (!currentReviewState) {
         return {
           success: false,
-          message: "No review state found for this card. Please start a review first."
+          message:
+            "No review state found for this card. Please start a review first.",
         };
       }
 
@@ -289,27 +354,30 @@ export const submitReviewTool = createTool({
       const latencyMs = Date.now() - context.start_time;
 
       // Apply SM-2 algorithm
-      logger?.info('📝 [SubmitReview] Applying SM-2 algorithm:', { 
+      logger?.info("📝 [SubmitReview] Applying SM-2 algorithm:", {
         grade: context.grade,
         current_ease: currentReviewState.ease_factor,
         current_interval: currentReviewState.interval_days,
-        current_repetitions: currentReviewState.repetitions 
+        current_repetitions: currentReviewState.repetitions,
       });
 
-      const sm2Result = calculateSM2({
-        repetitions: currentReviewState.repetitions,
-        interval_days: currentReviewState.interval_days,
-        ease_factor: currentReviewState.ease_factor,
-        due_date: currentReviewState.due_date,
-        lapses: currentReviewState.lapses,
-      }, context.grade);
+      const sm2Result = calculateSM2(
+        {
+          repetitions: currentReviewState.repetitions,
+          interval_days: currentReviewState.interval_days,
+          ease_factor: currentReviewState.ease_factor,
+          due_date: currentReviewState.due_date,
+          lapses: currentReviewState.lapses,
+        },
+        context.grade,
+      );
 
       // Determine new queue status
-      let newQueue: 'new' | 'learning' | 'review' = 'review';
+      let newQueue: "new" | "learning" | "review" = "review";
       if (sm2Result.repetitions === 0) {
-        newQueue = 'learning';
+        newQueue = "learning";
       } else if (sm2Result.repetitions === 1) {
-        newQueue = 'learning';
+        newQueue = "learning";
       }
 
       // Update review state
@@ -340,7 +408,7 @@ export const submitReviewTool = createTool({
         new_due: sm2Result.due_date,
         latency_ms: latencyMs,
         session_id: context.session_id,
-        direction: 'front_to_back',
+        direction: "front_to_back",
       };
 
       await createReviewLog(reviewLogData);
@@ -352,18 +420,19 @@ export const submitReviewTool = createTool({
         2: "Incorrect, but you knew it was easy. You'll see this again soon.",
         3: "Correct, but it was difficult. Good job working through it!",
         4: "Correct with some hesitation. You're getting there!",
-        5: "Perfect recall! Excellent work!"
+        5: "Perfect recall! Excellent work!",
       };
 
-      const nextReviewMessage = sm2Result.interval_days === 1 
-        ? "You'll review this again tomorrow."
-        : `You'll review this again in ${sm2Result.interval_days} days (${sm2Result.due_date}).`;
+      const nextReviewMessage =
+        sm2Result.interval_days === 1
+          ? "You'll review this again tomorrow."
+          : `You'll review this again in ${sm2Result.interval_days} days (${sm2Result.due_date}).`;
 
-      logger?.info('✅ [SubmitReview] Review completed successfully:', { 
+      logger?.info("✅ [SubmitReview] Review completed successfully:", {
         card_id: context.card_id,
         grade: context.grade,
         new_due_date: sm2Result.due_date,
-        new_interval: sm2Result.interval_days 
+        new_interval: sm2Result.interval_days,
       });
 
       return {
@@ -388,14 +457,13 @@ export const submitReviewTool = createTool({
           due_date: sm2Result.due_date,
           latency_ms: latencyMs,
         },
-        message: `${gradeMessages[context.grade as keyof typeof gradeMessages]} The answer was: "${card.back}". ${nextReviewMessage}`
+        message: `${gradeMessages[context.grade as keyof typeof gradeMessages]} The answer was: "${card.back}". ${nextReviewMessage}`,
       };
-
     } catch (error) {
-      logger?.error('❌ [SubmitReview] Error submitting review:', error);
+      logger?.error("❌ [SubmitReview] Error submitting review:", error);
       return {
         success: false,
-        message: `Error submitting review: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Error submitting review: ${error instanceof Error ? error.message : "Unknown error"}`,
       };
     }
   },
