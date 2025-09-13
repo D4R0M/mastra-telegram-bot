@@ -41,8 +41,19 @@ export default async function handleHelpCommand(
     "5 = Perfect recall",
   ];
 
-  return {
+  const showKeyboard = params.includes("__with_keyboard");
+  const response: CommandResponse = {
     response: helpText.join("\n"),
     parse_mode: "HTML",
   };
+
+  if (showKeyboard) {
+    response.reply_keyboard = [
+      ["/add", "/practice"],
+      ["/list", "/stats"],
+      ["/settings"],
+    ];
+  }
+
+  return response;
 }

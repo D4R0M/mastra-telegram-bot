@@ -24,6 +24,14 @@ import reset from "./reset.js";
 import reminders from "./reminders.js";
 import testCmd from "./test.js";
 
+const start: CommandHandler = async (
+  params,
+  rawParams,
+  userId,
+  state,
+  mastra,
+) => help(["__with_keyboard", ...params], rawParams, userId, state, mastra);
+
 export const commandRegistry: Record<string, CommandHandler> = {
   "/add": add,
   "/a": add,
@@ -53,7 +61,7 @@ export const commandRegistry: Record<string, CommandHandler> = {
   "/progress": streak,
   "/help": help,
   "/h": help,
-  "/start": help,
+  "/start": start,
   "/commands": help,
   "/reset": reset,
   "/remind": reminders,
