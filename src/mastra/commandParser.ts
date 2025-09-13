@@ -42,7 +42,7 @@ export interface ParsedCommand {
 // Helper Functions
 // ===============================
 
-function parseCommand(message: string): ParsedCommand | null {
+export function parseCommand(message: string): ParsedCommand | null {
   const trimmed = message.trim();
 
   // Check if it's a command (starts with /)
