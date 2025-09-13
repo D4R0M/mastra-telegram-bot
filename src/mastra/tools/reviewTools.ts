@@ -189,6 +189,7 @@ export const startReviewTool = createTool({
       .object({
         id: z.string(),
         front: z.string(),
+        back: z.string(),
         tags: z.array(z.string()),
         example: z.string().optional(),
         lang_front: z.string(),
@@ -241,6 +242,7 @@ export const startReviewTool = createTool({
         card: {
           id: card.id,
           front: card.front,
+          back: card.back,
           tags: card.tags,
           example: card.example,
           lang_front: card.lang_front,
