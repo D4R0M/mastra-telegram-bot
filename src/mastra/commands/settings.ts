@@ -37,15 +37,41 @@ export default async function handleSettingsCommand(
         `⏰ Reminder Times: ${settings.reminder_times.join(", ")}`,
         `🧮 Algorithm: ${settings.algorithm.toUpperCase()}`,
         `🌐 Language: ${settings.locale}`,
-        "\n<i>Use specific commands to update settings:</i>",
-        "<code>/settings session [size]</code>",
-        "<code>/settings reminders on/off</code>",
-        "<code>/settings timezone [tz]</code>",
       ];
+
+      const inline_keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: settings.reminders_enabled
+                ? "Disable Reminders"
+                : "Enable Reminders",
+              callback_data: "settings:toggle_reminders",
+            },
+          ],
+          [
+            {
+              text: "Change Timezone",
+              callback_data: "settings:change_timezone",
+            },
+          ],
+          [
+            {
+              text: "Session Size",
+              callback_data: "settings:session_size",
+            },
+          ],
+        ],
+      };
 
       return {
         response: settingsText.join("\n"),
         parse_mode: "HTML",
+        inline_keyboard,
+        conversationState: {
+          mode: "settings_menu",
+          step: 1,
+        },
       };
     } else {
       return {
