@@ -209,13 +209,34 @@ export const sendTelegramResponseStep = createStep({
         body.reply_markup = inputData.inline_keyboard;
       }
 
-      const response = await fetch(telegramApiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
+      let response: Response;
+      try {
+        response = await fetch(telegramApiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          logger?.warn(
+            "⚠️ [VocabularyWorkflow] Telegram request timed out after 10s",
+            { chatId: inputData.chatId },
+          );
+          return {
+            agentResponse: inputData.response,
+            messageSent: false,
+          };
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
