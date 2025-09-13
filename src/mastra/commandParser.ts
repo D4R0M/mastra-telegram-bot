@@ -1,6 +1,6 @@
 import type { IMastraLogger } from "@mastra/core/logger";
 import { buildToolExecCtx } from "./context.js";
-import { addCardTool, editCardTool } from "./tools/vocabularyTools.js";
+import { addCardTool, editCardTool, listCardsTool } from "./tools/vocabularyTools.js";
 import { submitReviewTool } from "./tools/reviewTools.js";
 import { importCSVTool, previewCSVTool } from "./tools/importExportTools.js";
 import { commandRegistry } from "./commands/index.js";
@@ -17,7 +17,8 @@ export interface ConversationState {
     | "review_session"
     | "import_csv"
     | "settings_menu"
-    | "filter_cards";
+    | "filter_cards"
+    | "list_navigation";
   step?: number;
   data?: any;
   lastMessageTime?: number;
@@ -89,6 +90,9 @@ async function handleConversationState(
 
     case "import_csv":
       return handleImportCSVFlow(message, userId, state, mastra);
+
+    case "list_navigation":
+      return handleListNavigationFlow(message, userId, state, mastra);
 
     default:
       // Clear unknown state
@@ -703,6 +707,102 @@ async function handleImportCSVFlow(
         "❌ Error importing CSV. Please check the format and try again.",
       conversationState: undefined,
       parse_mode: "HTML",
+    };
+  }
+}
+
+async function handleListNavigationFlow(
+  action: string,
+  userId: string,
+  state: ConversationState,
+  mastra?: any,
+): Promise<CommandResponse> {
+  const logger = mastra?.getLogger();
+
+  const offset = state.data?.offset || 0;
+  const limit = state.data?.limit || 20;
+
+  let newOffset = offset;
+  if (action === "next") {
+    newOffset = offset + limit;
+  } else if (action === "prev") {
+    newOffset = Math.max(0, offset - limit);
+  }
+
+  try {
+    const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+      requestId: userId,
+    });
+    const result = await listCardsTool.execute({
+      context: {
+        owner_id: userId,
+        limit,
+        offset: newOffset,
+        active_only: true,
+      },
+      runtimeContext,
+      tracingContext,
+      mastra,
+    });
+
+    if (result.success && result.cards && result.cards.length > 0) {
+      const startNumber = newOffset + 1;
+      const cardsList = result.cards
+        .map(
+          (card: any, index: number) =>
+            `${startNumber + index}. ${formatCard(card, true)}`,
+        )
+        .join("\n\n");
+
+      const hasPrev = newOffset > 0;
+      const hasNext = newOffset + limit < result.total_found;
+      const inline_keyboard = hasPrev || hasNext
+        ? {
+            inline_keyboard: [
+              [
+                ...(hasPrev
+                  ? [{ text: "⬅️ Prev", callback_data: "list_nav:prev" }]
+                  : []),
+                ...(hasNext
+                  ? [{ text: "Next ➡️", callback_data: "list_nav:next" }]
+                  : []),
+              ],
+            ],
+          }
+        : undefined;
+
+      return {
+        response:
+          `📚 <b>Your Vocabulary Cards (${result.total_found} total)</b>\n\n${cardsList}\n\n<i>Use /edit [id] to edit a card\nUse /delete [id] to remove a card</i>`,
+        parse_mode: "HTML",
+        inline_keyboard,
+        conversationState: inline_keyboard
+          ? {
+              mode: "list_navigation",
+              data: { offset: newOffset, limit },
+            }
+          : undefined,
+      };
+    } else if (result.cards && result.cards.length === 0) {
+      return {
+        response:
+          "📭 You don't have any cards yet.\n\nUse <code>/add</code> to create your first card!",
+        parse_mode: "HTML",
+        conversationState: undefined,
+      };
+    } else {
+      return {
+        response: `❌ ${result.message}`,
+        parse_mode: "HTML",
+        conversationState: undefined,
+      };
+    }
+  } catch (error) {
+    logger?.error("❌ [CommandParser] Error navigating list:", error);
+    return {
+      response: "❌ Error listing cards. Please try again.",
+      parse_mode: "HTML",
+      conversationState: undefined,
     };
   }
 }

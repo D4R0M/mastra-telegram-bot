@@ -37,6 +37,7 @@ import {
   getConversationState,
   saveConversationState,
 } from "./conversationStateStorage.js";
+import { processCommand } from "./commandParser.js";
 import { buildToolExecCtx } from "./context.js";
 import {
   getReminderSettingsTool,
@@ -378,6 +379,76 @@ export const mastra = new Mastra({
                   } catch (error) {
                     logger?.error(
                       "❌ [Telegram Trigger] Error handling callback query:",
+                      {
+                        error:
+                          error instanceof Error
+                            ? error.message
+                            : String(error),
+                        callbackData,
+                        chatId,
+                      },
+                    );
+                  }
+                } else if (callbackData?.startsWith("list_nav:")) {
+                  const action = callbackData.split(":")[1];
+                  const owner_id = chatId;
+
+                  try {
+                    const state = await getConversationState(owner_id);
+
+                    if (state?.mode === "list_navigation") {
+                      const result = await processCommand(
+                        action,
+                        owner_id,
+                        chatId,
+                        state,
+                        mastra,
+                      );
+
+                      await saveConversationState(
+                        owner_id,
+                        result.conversationState,
+                      );
+
+                      const TELEGRAM_BOT_TOKEN =
+                        process.env.TELEGRAM_BOT_TOKEN;
+                      if (TELEGRAM_BOT_TOKEN) {
+                        const answerUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`;
+                        const editUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`;
+
+                        const answerOptions = {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            callback_query_id: callbackQueryId,
+                          }),
+                        };
+
+                        const editBody: any = {
+                          chat_id: chatId,
+                          message_id: messageId,
+                          text: result.response,
+                          parse_mode: result.parse_mode || "HTML",
+                        };
+                        if (result.inline_keyboard) {
+                          editBody.reply_markup = result.inline_keyboard;
+                        }
+
+                        const editOptions = {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(editBody),
+                        };
+
+                        await Promise.all([
+                          fetch(answerUrl, answerOptions),
+                          fetch(editUrl, editOptions),
+                        ]);
+                      }
+                    }
+                  } catch (error) {
+                    logger?.error(
+                      "❌ [Telegram Trigger] Error handling list navigation:",
                       {
                         error:
                           error instanceof Error
