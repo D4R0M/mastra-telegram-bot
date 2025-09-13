@@ -38,6 +38,7 @@ import {
   saveConversationState,
 } from "./conversationStateStorage.js";
 import { buildToolExecCtx } from "./context.js";
+import { isAuthorizedTelegramUser } from "./authorization.js";
 import { handleListCallback } from "./commandParser.js";
 import {
   getReminderSettingsTool,
@@ -235,19 +236,50 @@ export const mastra = new Mastra({
             try {
               const payload = await c.req.json();
 
+              const chatId =
+                payload?.message?.chat?.id ||
+                payload?.callback_query?.message?.chat?.id;
+              const userId =
+                payload?.message?.from?.id || payload?.callback_query?.from?.id;
+
               logger?.info("📝 [Telegram] Received", {
                 type: payload?.message
                   ? "message"
                   : payload?.callback_query
                     ? "callback"
                     : "unknown",
-                chatId:
-                  payload?.message?.chat?.id ||
-                  payload?.callback_query?.message?.chat?.id,
-                userId:
-                  payload?.message?.from?.id ||
-                  payload?.callback_query?.from?.id,
+                chatId,
+                userId,
               });
+
+              if (!isAuthorizedTelegramUser(userId)) {
+                logger?.warn("🚫 [Telegram] Unauthorized access attempt", {
+                  userId,
+                });
+                const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+                if (TELEGRAM_BOT_TOKEN && chatId) {
+                  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+                  const options = {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: chatId,
+                      text: "Sorry, you are not authorized to use this bot.",
+                    }),
+                  } as const;
+                  try {
+                    await fetch(url, options);
+                  } catch (err) {
+                    logger?.error(
+                      "❌ [Telegram] Failed to notify unauthorized user",
+                      {
+                        error: err instanceof Error ? err.message : String(err),
+                      },
+                    );
+                  }
+                }
+                return c.text("Unauthorized", 200);
+              }
 
               // Handle callback queries (button presses)
               if (payload?.callback_query) {
