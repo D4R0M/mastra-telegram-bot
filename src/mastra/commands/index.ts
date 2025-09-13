@@ -22,6 +22,7 @@ import due from "./due.js";
 import help from "./help.js";
 import reset from "./reset.js";
 import reminders from "./reminders.js";
+import testCmd from "./test.js";
 
 export const commandRegistry: Record<string, CommandHandler> = {
   "/add": add,
@@ -57,4 +58,5 @@ export const commandRegistry: Record<string, CommandHandler> = {
   "/reset": reset,
   "/remind": reminders,
   "/reminders": reminders,
+  "/test": testCmd,
 };
