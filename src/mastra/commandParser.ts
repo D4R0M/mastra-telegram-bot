@@ -223,13 +223,32 @@ async function handleReviewSessionFlow(
     };
   }
 
+  // Initialize tracking stats if missing
+  if (state.data.correct_count === undefined) {
+    state.data.correct_count = 0;
+  }
+  if (state.data.incorrect_count === undefined) {
+    state.data.incorrect_count = 0;
+  }
+  if (state.data.session_start === undefined) {
+    state.data.session_start = Date.now();
+  }
+
   const normalized = message.toLowerCase().trim();
 
   // Check for exit commands
   if (normalized === "exit" || normalized === "quit" || normalized === "stop") {
+    const total =
+      (state.data.correct_count || 0) + (state.data.incorrect_count || 0);
+    const accuracy =
+      total > 0 ? Math.round((state.data.correct_count / total) * 100) : 0;
+    const durationMs = Date.now() - (state.data.session_start || Date.now());
+    const minutes = Math.floor(durationMs / 60000);
+    const seconds = Math.floor((durationMs % 60000) / 1000);
+    const durationStr = `${minutes}m ${seconds}s`;
+
     return {
-      response:
-        "👋 Review session ended. Great work! Use /stats to see your progress.",
+      response: `👋 Review session ended. Great work!\n\n✅ Correct: ${state.data.correct_count}\n❌ Incorrect: ${state.data.incorrect_count}\nAccuracy: ${accuracy}%\n⏱️ Duration: ${durationStr}`,
       conversationState: undefined,
       parse_mode: "HTML",
     };
@@ -374,6 +393,12 @@ async function handleReviewSessionFlow(
         });
 
         if (result.success) {
+          const wasCorrect = grade >= 3;
+          const updatedCorrect =
+            (state.data.correct_count || 0) + (wasCorrect ? 1 : 0);
+          const updatedIncorrect =
+            (state.data.incorrect_count || 0) + (wasCorrect ? 0 : 1);
+
           // Check if there are more cards in the session
           const nextIndex = (state.data.current_index || 1) + 1;
           const hasMoreCards =
@@ -382,7 +407,7 @@ async function handleReviewSessionFlow(
           if (hasMoreCards) {
             const nextCard = state.data.all_cards[nextIndex - 1];
             return {
-              response: `${grade >= 3 ? "✅" : "📝"} Recorded (Grade: ${grade})\n\n<b>Card ${nextIndex}/${state.data.total_cards}</b>\n\n❓ <b>${nextCard.front}</b>\n\n<i>Try to recall the answer, then type your response or type "show" to reveal.</i>`,
+              response: `${grade >= 3 ? "✅" : "📝"} Recorded (Grade: ${grade})\n\n<b>Card ${nextIndex}/${state.data.total_cards}</b>\n\n❓ <b>${nextCard.front}</b>\n\n<i>Try to recall the answer, then type your response or type \"show\" to reveal.</i>`,
               conversationState: {
                 mode: "review_session",
                 step: 1,
@@ -392,15 +417,61 @@ async function handleReviewSessionFlow(
                   current_index: nextIndex,
                   total_cards: state.data.total_cards,
                   all_cards: state.data.all_cards,
-                  start_time: state.data.start_time,
+                  start_time: Date.now(),
+                  correct_count: updatedCorrect,
+                  incorrect_count: updatedIncorrect,
+                  session_start: state.data.session_start,
                 },
               },
               parse_mode: "HTML",
             };
           } else {
             // Session complete
+            const totalAnswered = updatedCorrect + updatedIncorrect;
+            const accuracy =
+              totalAnswered > 0
+                ? Math.round((updatedCorrect / totalAnswered) * 100)
+                : 0;
+            const durationMs =
+              Date.now() - (state.data.session_start || Date.now());
+            const minutes = Math.floor(durationMs / 60000);
+            const seconds = Math.floor((durationMs % 60000) / 1000);
+            const durationStr = `${minutes}m ${seconds}s`;
+
+            let summary = `🎉 <b>Session Complete!</b>\n\n${result.message}\n\n✅ Correct: ${updatedCorrect}\n❌ Incorrect: ${updatedIncorrect}\nAccuracy: ${accuracy}%\n⏱️ Duration: ${durationStr}`;
+
+            try {
+              const { getComprehensiveStatsTool } = await import(
+                "./tools/statisticsTools.js"
+              );
+              const { runtimeContext, tracingContext } = buildToolExecCtx(
+                mastra,
+                { requestId: userId },
+              );
+              const stats = await getComprehensiveStatsTool.execute({
+                context: {
+                  owner_id: userId,
+                  timezone: "Europe/Stockholm",
+                  success_threshold: 3,
+                },
+                runtimeContext,
+                tracingContext,
+                mastra,
+              });
+              if (stats.success && stats.stats) {
+                summary += `\n🔥 Current streak: ${
+                  stats.stats.streaks?.current_streak || 0
+                } days`;
+              }
+            } catch (err) {
+              logger?.error("❌ [CommandParser] Error fetching stats:", err);
+            }
+
+            summary +=
+              "\n\nGreat work! Come back tomorrow for more practice.\n\nUse /stats to see your progress.";
+
             return {
-              response: `🎉 <b>Session Complete!</b>\n\n${result.message}\n\nGreat work! Come back tomorrow for more practice.\n\nUse /stats to see your progress.`,
+              response: summary,
               conversationState: undefined,
               parse_mode: "HTML",
             };
