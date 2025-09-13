@@ -7,6 +7,7 @@ import { commandRegistry } from "./commands/index.js";
 import { formatCard } from "./commands/utils.js";
 import { updateSessionSettingsTool } from "./tools/settingsTools.js";
 import { updateReminderSettingsTool } from "./tools/reminderTools.js";
+import { clearConversationState } from "./conversationStateStorage.js";
 
 // ===============================
 // Types and Interfaces
@@ -881,6 +882,7 @@ export async function processCommand(
   chatId: string,
   conversationState?: ConversationState,
   mastra?: any,
+  stateExpired: boolean = false,
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
   logger?.info("🔧 [CommandParser] Processing message:", {
@@ -888,6 +890,17 @@ export async function processCommand(
     userId,
     hasState: !!conversationState,
   });
+
+  if (stateExpired) {
+    await clearConversationState(userId);
+    return {
+      response:
+        "Session timed out—please start again with /add or /practice",
+      conversationState: undefined,
+      parse_mode: "HTML",
+      remove_keyboard: true,
+    };
+  }
 
   // Handle special internal messages
   if (

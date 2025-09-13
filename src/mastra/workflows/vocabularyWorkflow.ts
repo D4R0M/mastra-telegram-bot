@@ -66,7 +66,9 @@ const useCommandParserStep = createStep({
 
     try {
       // Get any existing conversation state
-      const existingState = await getConversationState(inputData.owner_id);
+      const { state: existingState, expired } = await getConversationState(
+        inputData.owner_id,
+      );
 
       // Process the command using the deterministic parser
       const result = await processCommand(
@@ -75,6 +77,7 @@ const useCommandParserStep = createStep({
         inputData.chatId,
         existingState,
         mastra,
+        expired,
       );
 
       // Save the new conversation state if changed

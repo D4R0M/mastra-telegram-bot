@@ -273,7 +273,7 @@ export const mastra = new Mastra({
 
                   try {
                     // Get conversation state to get session data
-                    const state = await getConversationState(owner_id);
+                    const { state } = await getConversationState(owner_id);
 
                     if (state?.mode === "review_session" && state.data) {
                       // Submit the review
