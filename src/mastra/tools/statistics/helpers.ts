@@ -1,5 +1,6 @@
 import { getPool } from "../../../db/client";
 import type { IMastraLogger } from "@mastra/core/logger";
+import NodeCache from "node-cache";
 
 // ===============================
 // Statistics Helper Functions
@@ -7,19 +8,76 @@ import type { IMastraLogger } from "@mastra/core/logger";
 
 // Helper function to format dates
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
+}
+
+// In-memory cache for statistics with 1 minute TTL
+const statsCache = new NodeCache({ stdTTL: 60 });
+
+interface DueCardsStats {
+  total_cards: number;
+  new_cards: number;
+  learning_cards: number;
+  review_cards: number;
+  due_cards: number;
+  overdue_cards: number;
+  cards_due_today: number;
+  cards_due_tomorrow: number;
+  average_ease: number;
+  total_reviews: number;
+}
+
+interface RetentionStats {
+  total_reviews: number;
+  successful_reviews: number;
+  retention_rate: number;
+  average_grade: number;
+  reviews_last_7_days: number;
+  reviews_last_30_days: number;
+  success_rate_last_7_days: number;
+  success_rate_last_30_days: number;
+  mature_cards: number;
+  young_cards: number;
+}
+
+interface StreakStats {
+  current_streak: number;
+  longest_streak: number;
+  total_study_days: number;
+  days_since_last_review: number;
+  reviews_today: number;
+  average_daily_reviews: number;
+  streak_start_date: string | null;
+  last_review_date: string | null;
+}
+
+interface EaseHistogram {
+  ease_ranges: { range: string; count: number; percentage: number }[];
+  average_ease: number;
+  median_ease: number;
+  min_ease: number;
+  max_ease: number;
+  cards_below_default: number;
+  cards_above_default: number;
 }
 
 export async function getDueCardsStats(
-  owner_id: string, 
-  timezone: string = "Europe/Stockholm", 
-  logger?: IMastraLogger
+  owner_id: string,
+  timezone: string = "Europe/Stockholm",
+  logger?: IMastraLogger,
 ) {
-  logger?.info('📝 [StatisticsHelper] Calculating due cards statistics');
+  const cacheKey = `dueCards:${owner_id}`;
+  const cached = statsCache.get<DueCardsStats>(cacheKey);
+  if (cached) {
+    logger?.info("📝 [StatisticsHelper] Returning cached due cards statistics");
+    return cached;
+  }
+
+  logger?.info("📝 [StatisticsHelper] Calculating due cards statistics");
 
   const pool = getPool();
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
   const statsQuery = `
     SELECT 
@@ -41,7 +99,7 @@ export async function getDueCardsStats(
   const result = await pool.query(statsQuery, [owner_id, today, tomorrow]);
   const stats = result.rows[0] || {};
 
-  return {
+  const formatted: DueCardsStats = {
     total_cards: parseInt(stats.total_cards) || 0,
     new_cards: parseInt(stats.new_cards) || 0,
     learning_cards: parseInt(stats.learning_cards) || 0,
@@ -53,14 +111,24 @@ export async function getDueCardsStats(
     average_ease: parseFloat(stats.average_ease) || 2.5,
     total_reviews: parseInt(stats.total_reviews) || 0,
   };
+
+  statsCache.set(cacheKey, formatted);
+  return formatted;
 }
 
 export async function getRetentionStats(
-  owner_id: string, 
-  success_threshold: number = 3, 
-  logger?: IMastraLogger
+  owner_id: string,
+  success_threshold: number = 3,
+  logger?: IMastraLogger,
 ) {
-  logger?.info('📝 [StatisticsHelper] Calculating retention statistics');
+  const cacheKey = `retention:${owner_id}`;
+  const cached = statsCache.get<RetentionStats>(cacheKey);
+  if (cached) {
+    logger?.info("📝 [StatisticsHelper] Returning cached retention statistics");
+    return cached;
+  }
+
+  logger?.info("📝 [StatisticsHelper] Calculating retention statistics");
 
   const pool = getPool();
   const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -99,37 +167,58 @@ export async function getRetentionStats(
     owner_id,
     success_threshold,
     sevenDaysAgo,
-    thirtyDaysAgo
+    thirtyDaysAgo,
   ]);
 
   const stats = result.rows[0] || {};
 
-  return {
+  const formatted: RetentionStats = {
     total_reviews: parseInt(stats.total_reviews) || 0,
     successful_reviews: parseInt(stats.successful_reviews) || 0,
-    retention_rate: stats.total_reviews > 0 ? 
-      (parseInt(stats.successful_reviews) / parseInt(stats.total_reviews)) * 100 : 0,
+    retention_rate:
+      stats.total_reviews > 0
+        ? (parseInt(stats.successful_reviews) / parseInt(stats.total_reviews)) *
+          100
+        : 0,
     average_grade: parseFloat(stats.average_grade) || 0,
     reviews_last_7_days: parseInt(stats.reviews_last_7_days) || 0,
     reviews_last_30_days: parseInt(stats.reviews_last_30_days) || 0,
-    success_rate_last_7_days: stats.reviews_last_7_days > 0 ?
-      (parseInt(stats.successful_last_7_days) / parseInt(stats.reviews_last_7_days)) * 100 : 0,
-    success_rate_last_30_days: stats.reviews_last_30_days > 0 ?
-      (parseInt(stats.successful_last_30_days) / parseInt(stats.reviews_last_30_days)) * 100 : 0,
+    success_rate_last_7_days:
+      stats.reviews_last_7_days > 0
+        ? (parseInt(stats.successful_last_7_days) /
+            parseInt(stats.reviews_last_7_days)) *
+          100
+        : 0,
+    success_rate_last_30_days:
+      stats.reviews_last_30_days > 0
+        ? (parseInt(stats.successful_last_30_days) /
+            parseInt(stats.reviews_last_30_days)) *
+          100
+        : 0,
     mature_cards: parseInt(stats.mature_cards) || 0,
     young_cards: parseInt(stats.young_cards) || 0,
   };
+
+  statsCache.set(cacheKey, formatted);
+  return formatted;
 }
 
 export async function getStreakStats(
-  owner_id: string, 
-  timezone: string = "Europe/Stockholm", 
-  logger?: IMastraLogger
+  owner_id: string,
+  timezone: string = "Europe/Stockholm",
+  logger?: IMastraLogger,
 ) {
-  logger?.info('📝 [StatisticsHelper] Calculating streak statistics');
+  const cacheKey = `streak:${owner_id}`;
+  const cached = statsCache.get<StreakStats>(cacheKey);
+  if (cached) {
+    logger?.info("📝 [StatisticsHelper] Returning cached streak statistics");
+    return cached;
+  }
+
+  logger?.info("📝 [StatisticsHelper] Calculating streak statistics");
 
   const pool = getPool();
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
 
   // Get review dates and counts
   const reviewDatesQuery = `
@@ -164,12 +253,12 @@ export async function getStreakStats(
 
   const [reviewDatesResult, overallStatsResult] = await Promise.all([
     pool.query(reviewDatesQuery, [owner_id]),
-    pool.query(overallStatsQuery, [owner_id, today])
+    pool.query(overallStatsQuery, [owner_id, today]),
   ]);
 
-  const reviewDates = reviewDatesResult.rows.map(row => ({
+  const reviewDates = reviewDatesResult.rows.map((row) => ({
     date: row.review_date,
-    count: parseInt(row.reviews_count)
+    count: parseInt(row.reviews_count),
   }));
 
   const overallStats = overallStatsResult.rows[0] || {};
@@ -182,22 +271,27 @@ export async function getStreakStats(
 
   if (reviewDates.length > 0) {
     const todayDate = new Date(today);
-    
+
     // Check if user reviewed today or yesterday (to maintain streak)
     const mostRecentDate = new Date(reviewDates[0].date);
-    const daysSinceLastReview = Math.floor((todayDate.getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24));
-    
+    const daysSinceLastReview = Math.floor(
+      (todayDate.getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
     if (daysSinceLastReview <= 1) {
       // Current streak is active
       currentStreakLength = 1;
       streakStartDate = reviewDates[0].date;
-      
+
       // Count consecutive days backwards
       for (let i = 1; i < reviewDates.length; i++) {
-        const currentDate = new Date(reviewDates[i-1].date);
+        const currentDate = new Date(reviewDates[i - 1].date);
         const previousDate = new Date(reviewDates[i].date);
-        const daysDiff = Math.floor((currentDate.getTime() - previousDate.getTime()) / (1000 * 60 * 60 * 24));
-        
+        const daysDiff = Math.floor(
+          (currentDate.getTime() - previousDate.getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+
         if (daysDiff === 1) {
           currentStreakLength++;
           streakStartDate = reviewDates[i].date;
@@ -211,10 +305,13 @@ export async function getStreakStats(
     // Calculate longest streak
     let tempStreak = 1;
     for (let i = 1; i < reviewDates.length; i++) {
-      const currentDate = new Date(reviewDates[i-1].date);
+      const currentDate = new Date(reviewDates[i - 1].date);
       const previousDate = new Date(reviewDates[i].date);
-      const daysDiff = Math.floor((currentDate.getTime() - previousDate.getTime()) / (1000 * 60 * 60 * 24));
-      
+      const daysDiff = Math.floor(
+        (currentDate.getTime() - previousDate.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+
       if (daysDiff === 1) {
         tempStreak++;
       } else {
@@ -225,26 +322,43 @@ export async function getStreakStats(
     longestStreak = Math.max(longestStreak, tempStreak, currentStreak);
   }
 
-  return {
+  const formatted: StreakStats = {
     current_streak: currentStreak,
     longest_streak: longestStreak,
     total_study_days: parseInt(overallStats.total_study_days) || 0,
-    days_since_last_review: reviewDates.length > 0 ? 
-      Math.floor((new Date(today).getTime() - new Date(reviewDates[0].date).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+    days_since_last_review:
+      reviewDates.length > 0
+        ? Math.floor(
+            (new Date(today).getTime() -
+              new Date(reviewDates[0].date).getTime()) /
+              (1000 * 60 * 60 * 24),
+          )
+        : 0,
     reviews_today: parseInt(overallStats.reviews_today) || 0,
     average_daily_reviews: parseFloat(overallStats.average_daily_reviews) || 0,
     streak_start_date: streakStartDate,
-    last_review_date: overallStats.last_review_date ? 
-      new Date(overallStats.last_review_date).toISOString().split('T')[0] : null,
+    last_review_date: overallStats.last_review_date
+      ? new Date(overallStats.last_review_date).toISOString().split("T")[0]
+      : null,
   };
+
+  statsCache.set(cacheKey, formatted);
+  return formatted;
 }
 
 export async function getEaseHistogram(
-  owner_id: string, 
-  bin_size: number = 0.2, 
-  logger?: IMastraLogger
+  owner_id: string,
+  bin_size: number = 0.2,
+  logger?: IMastraLogger,
 ) {
-  logger?.info('📝 [StatisticsHelper] Generating ease histogram');
+  const cacheKey = `easeHistogram:${owner_id}`;
+  const cached = statsCache.get<EaseHistogram>(cacheKey);
+  if (cached) {
+    logger?.info("📝 [StatisticsHelper] Returning cached ease histogram");
+    return cached;
+  }
+
+  logger?.info("📝 [StatisticsHelper] Generating ease histogram");
 
   const pool = getPool();
 
@@ -260,7 +374,7 @@ export async function getEaseHistogram(
   const result = await pool.query(easeQuery, [owner_id]);
 
   if (result.rows.length === 0) {
-    return {
+    const empty: EaseHistogram = {
       ease_ranges: [],
       average_ease: 2.5,
       median_ease: 2.5,
@@ -269,28 +383,32 @@ export async function getEaseHistogram(
       cards_below_default: 0,
       cards_above_default: 0,
     };
+    statsCache.set(cacheKey, empty);
+    return empty;
   }
 
-  const easeFactors = result.rows.map(row => parseFloat(row.ease_factor));
+  const easeFactors = result.rows.map((row) => parseFloat(row.ease_factor));
   const totalCards = easeFactors.length;
 
   // Calculate basic statistics
-  const averageEase = easeFactors.reduce((sum, ease) => sum + ease, 0) / totalCards;
+  const averageEase =
+    easeFactors.reduce((sum, ease) => sum + ease, 0) / totalCards;
   const minEase = Math.min(...easeFactors);
   const maxEase = Math.max(...easeFactors);
-  
+
   // Calculate proper median for sorted array
   let medianEase: number;
   if (totalCards % 2 === 0) {
     // Even number: average of two middle values
-    medianEase = (easeFactors[totalCards / 2 - 1] + easeFactors[totalCards / 2]) / 2;
+    medianEase =
+      (easeFactors[totalCards / 2 - 1] + easeFactors[totalCards / 2]) / 2;
   } else {
     // Odd number: middle value
     medianEase = easeFactors[Math.floor(totalCards / 2)];
   }
-  
-  const cardsBelowDefault = easeFactors.filter(ease => ease < 2.5).length;
-  const cardsAboveDefault = easeFactors.filter(ease => ease > 2.5).length;
+
+  const cardsBelowDefault = easeFactors.filter((ease) => ease < 2.5).length;
+  const cardsAboveDefault = easeFactors.filter((ease) => ease > 2.5).length;
 
   // Create histogram bins
   const minBin = Math.floor(minEase / bin_size) * bin_size;
@@ -304,7 +422,7 @@ export async function getEaseHistogram(
   }
 
   // Fill bins
-  easeFactors.forEach(ease => {
+  easeFactors.forEach((ease) => {
     const binStart = Math.floor(ease / bin_size) * bin_size;
     const binKey = `${binStart.toFixed(1)}-${(binStart + bin_size).toFixed(1)}`;
     if (bins[binKey] !== undefined) {
@@ -313,13 +431,15 @@ export async function getEaseHistogram(
   });
 
   // Convert to histogram format
-  const easeRanges = Object.entries(bins).map(([range, count]) => ({
-    range,
-    count,
-    percentage: (count / totalCards) * 100,
-  })).filter(item => item.count > 0);
+  const easeRanges = Object.entries(bins)
+    .map(([range, count]) => ({
+      range,
+      count,
+      percentage: (count / totalCards) * 100,
+    }))
+    .filter((item) => item.count > 0);
 
-  return {
+  const formatted: EaseHistogram = {
     ease_ranges: easeRanges,
     average_ease: averageEase,
     median_ease: medianEase,
@@ -328,4 +448,7 @@ export async function getEaseHistogram(
     cards_below_default: cardsBelowDefault,
     cards_above_default: cardsAboveDefault,
   };
+
+  statsCache.set(cacheKey, formatted);
+  return formatted;
 }
