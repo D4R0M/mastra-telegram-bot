@@ -39,10 +39,18 @@ const useCommandParserStep = createStep({
       .any()
       .optional()
       .describe("Inline keyboard markup for Telegram"),
+    reply_keyboard: z
+      .any()
+      .optional()
+      .describe("Reply keyboard markup for Telegram"),
     parse_mode: z
       .string()
       .optional()
       .describe("Parse mode for Telegram message"),
+    remove_keyboard: z
+      .boolean()
+      .optional()
+      .describe("Flag to remove custom keyboard"),
   }),
 
   execute: async ({ inputData, mastra }) => {
@@ -89,7 +97,9 @@ const useCommandParserStep = createStep({
         chatId: inputData.chatId,
         messageId: inputData.messageId,
         inline_keyboard: result.inline_keyboard,
+        reply_keyboard: result.reply_keyboard,
         parse_mode: result.parse_mode || "HTML",
+        remove_keyboard: result.remove_keyboard,
       };
     } catch (error) {
       logger?.error("❌ [VocabularyWorkflow] Error processing command:", {
@@ -125,10 +135,18 @@ export const sendTelegramResponseStep = createStep({
       .any()
       .optional()
       .describe("Inline keyboard markup for Telegram"),
+    reply_keyboard: z
+      .any()
+      .optional()
+      .describe("Reply keyboard markup for Telegram"),
     parse_mode: z
       .string()
       .optional()
       .describe("Parse mode for Telegram message"),
+    remove_keyboard: z
+      .boolean()
+      .optional()
+      .describe("Flag to remove custom keyboard"),
   }),
   outputSchema: z.object({
     agentResponse: z.string().describe("The response text that was sent"),
@@ -174,8 +192,17 @@ export const sendTelegramResponseStep = createStep({
         parse_mode: inputData.parse_mode || "HTML",
       };
 
-      // Add inline keyboard if provided
-      if (inputData.inline_keyboard) {
+      // Add keyboards if provided
+      if (inputData.remove_keyboard) {
+        body.reply_markup = { remove_keyboard: true };
+      } else if (inputData.reply_keyboard) {
+        body.reply_markup = {
+          keyboard: inputData.reply_keyboard.map((row: any[]) =>
+            row.map((text: string) => ({ text })),
+          ),
+          resize_keyboard: true,
+        };
+      } else if (inputData.inline_keyboard) {
         body.reply_markup = inputData.inline_keyboard;
       }
 

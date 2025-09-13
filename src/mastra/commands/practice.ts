@@ -79,6 +79,7 @@ export default async function handlePracticeCommand(
           },
         },
         parse_mode: "HTML",
+        remove_keyboard: true,
       };
     } else {
       return {

@@ -70,6 +70,7 @@ export default async function handleAddCommand(
         data: {},
       },
       parse_mode: "HTML",
+      remove_keyboard: true,
     };
   }
 

@@ -29,6 +29,7 @@ export interface CommandResponse {
   response: string;
   conversationState?: ConversationState;
   inline_keyboard?: any;
+  reply_keyboard?: any;
   parse_mode?: "HTML" | "Markdown";
   edit_message_id?: string; // For editing previous message
   remove_keyboard?: boolean; // To remove keyboard after selection
