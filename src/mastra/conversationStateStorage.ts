@@ -1,4 +1,5 @@
 import { getPool } from "../db/client.js";
+import NodeCache from "node-cache";
 import type { ConversationState } from "./commandParser";
 
 export interface ConversationStateResult {
@@ -26,11 +27,28 @@ async function ensureStateTable(): Promise<void> {
 // Ensure the table is created once when module loads
 const stateTableReady = ensureStateTable();
 
+// In-memory cache for faster state access (5 minute TTL)
+const stateCache = new NodeCache({ stdTTL: 300 });
+
 // Get conversation state for a user
 export async function getConversationState(
   userId: string,
 ): Promise<ConversationStateResult> {
   await stateTableReady;
+  // First check the in-memory cache
+  const cached = stateCache.get<ConversationState>(userId);
+  if (cached) {
+    // NodeCache TTL handles expiration, but verify lastMessageTime for safety
+    if (
+      cached.lastMessageTime &&
+      Date.now() - cached.lastMessageTime > 5 * 60 * 1000
+    ) {
+      stateCache.del(userId);
+    } else {
+      return { state: cached, expired: false };
+    }
+  }
+
   const pool = getPool();
 
   try {
@@ -50,6 +68,8 @@ export async function getConversationState(
         }
       }
 
+      // Cache the result for subsequent requests
+      stateCache.set(userId, state);
       return { state, expired: false };
     }
 
@@ -85,6 +105,9 @@ export async function saveConversationState(
        DO UPDATE SET state_data = $2, updated_at = CURRENT_TIMESTAMP`,
       [userId, JSON.stringify(state)],
     );
+
+    // Update cache
+    stateCache.set(userId, state);
   } catch (error) {
     console.error("Error saving conversation state:", error);
   }
@@ -99,6 +122,8 @@ export async function clearConversationState(userId: string): Promise<void> {
     await pool.query("DELETE FROM conversation_states WHERE user_id = $1", [
       userId,
     ]);
+    // Remove from cache as well
+    stateCache.del(userId);
   } catch (error) {
     console.error("Error clearing conversation state:", error);
   }

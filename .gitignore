@@ -1,0 +1,19 @@
+node_modules/
+.env
+
+# Build output
+.mastraprivate
+.mastra
+.mastra-output
+.mastracache
+.mastrasts
+.mastratest
+.mastradata
+.mastratext
+.mastradocs
+.mastradist
+.mastrabuild
+.dist
+build/
+dist/
+
