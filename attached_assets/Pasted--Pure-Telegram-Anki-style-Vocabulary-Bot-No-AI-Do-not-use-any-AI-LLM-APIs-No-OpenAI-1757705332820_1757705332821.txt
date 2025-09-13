@@ -1,0 +1,146 @@
+
+
+# Pure Telegram “Anki-style” Vocabulary Bot (No AI)
+
+**Do not use any AI/LLM APIs.** No OpenAI calls. Deterministic logic only.
+
+## Scope
+
+* Telegram bot to help me learn vocabulary via **active recall + SM-2**.
+* UX similar to Anki:
+
+  * `/add` → add cards (front/back)
+  * `/practice` → review session (active recall, SM-2 scheduling)
+  * Bot runs continuously and **notifies me** when cards are due.
+* Timezone: **Europe/Stockholm** (respect DST).
+* Language: English; short and clear copy.
+
+
+
+---
+
+## Commands & UX
+
+### 📌 Card management
+
+* **`/add`** → guided add card
+
+  * Ask **front**, then **back**; save with SM-2 defaults (`EF=2.5`, `reps=0`, `due=now`).
+  * Shortcut: `/add front :: back` inline.
+  * Reply: “Added ✅ (due today).”
+
+* **`/practice`** → review session
+
+  * Shows **front**, waits for me to type answer.
+  * Replies with:
+
+    ```
+    Front: ...
+    Your answer: ...
+    Correct: ...
+    ```
+
+    * buttons: `[0 Forgot] [3 Hard] [4 Good] [5 Easy]`.
+  * Updates SM-2 scheduling.
+  * Session cap (default 10). End with: “Done! Reviewed N. Due left: M.”
+
+* **`/list`** → show recent cards (last 10, with ID).
+
+* **`/edit <id>`** → update front/back.
+
+* **`/delete <id>`** → confirm and remove card.
+
+* **`/due`** → show count of due cards.
+
+* **`/export`** → download CSV backup.
+
+* **`/import`** → upload CSV/TSV to bulk-add.
+
+* **`/tag <id> <tag>`** → add tag(s) to a card.
+
+* **`/filter <tag>`** → restrict practice to that tag (until cleared).
+
+* **`/suspend <id>`** → pause card from scheduling (toggle back with `/unsuspend`).
+
+---
+
+### ⚙️ Settings
+
+* **`/settings`** → inline menu:
+
+  * Session size (default 10)
+  * Daily review cap (100)
+  * Daily new cap (10)
+  * Reminder on/off
+  * Reminder time (HH\:MM)
+  * Reminder window (08:00–21:00)
+  * Do Not Disturb (21:00–08:00)
+  * Review direction (front→back / back→front / mixed)
+
+* **`/remind`** → quick control
+
+  * `/remind on|off`
+  * `/remind set 10:00`
+  * `/remind window 08:00-21:00`
+
+---
+
+### 🛠 Utility
+
+* **`/stats`** → progress summary (due today, reviewed today, retention %, streak).
+* **`/help`** → list commands.
+* **`/reset`** → reset scheduling or wipe all (with confirmation).
+* **`/streak`** → show streak.
+
+---
+
+## SM-2 Algorithm
+
+* Initialize EF=2.5, reps=0, interval=0.
+* On grade `q` (0–5):
+
+  * If `q < 3`:
+
+    * reps=0, interval=1d, due=now+1d
+  * Else:
+
+    * EF = max(1.3, EF + (0.1 - (5-q)\*(0.08 + (5-q)\*0.02)))
+    * If reps==0: interval=1d
+    * If reps==1: interval=6d
+    * Else: interval=round(interval\*EF)
+    * reps+=1; due=now+interval
+
+---
+
+## Notifications
+
+* Use JobQueue.
+* On boot: schedule reminder jobs from prefs.
+* Every 15 min: check due cards.
+* If `due_at <= now` and within reminder window (not in DND):
+
+  * Send one summary: “You have **X** cards due. Start review?” with deep link to `/practice`.
+* Avoid spam: only send if due count increased/changed.
+
+---
+
+## Data Model
+
+* `Card(id, front, back, tags, note, suspended, created_at, updated_at)`
+* `ReviewState(card_id [FK], reps, interval_days, ease_factor, due_at, last_grade, last_reviewed_at, direction_mode)`
+* `ReviewLog(id, card_id, ts, grade, latency_ms, direction, front_snapshot, back_snapshot)`
+* `Prefs(id=1, session_cap, daily_review_cap, daily_new_cap, remind_enabled, remind_time, window_start, window_end, dnd_start, dnd_end, direction, tz, active_tag_filter)`
+
+---
+
+## Acceptance Criteria
+
+* `/add`, `/practice`, `/due`, `/stats`, `/remind`, `/list`, `/edit`, `/delete`, `/export`, `/import` work as described.
+* `/tag`, `/filter`, `/suspend` are **core commands** (implemented, not optional).
+* Bot runs continuously, tracks due cards, and notifies me at the right time.
+* SM-2 scheduling works and persists across restarts.
+* No AI/LLM usage anywhere.
+
+ 
+
+
