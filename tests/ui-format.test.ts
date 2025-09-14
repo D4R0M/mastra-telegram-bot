@@ -5,8 +5,10 @@ import {
   fmtStatsHTML,
   fmtSettingsHTML,
   fmtHelpHTML,
+  fmtStreakHTML,
   type Stats,
   type Settings,
+  type Streak,
 } from "../src/mastra/ui/format.ts";
 
 describe("format helpers", () => {
@@ -66,5 +68,23 @@ describe("format helpers", () => {
     const core = fmtHelpHTML("core");
     expect(core).toContain("📌 Core Commands");
     expect(core).toContain("🎯 <b>Grading Scale</b>");
+  });
+
+  it("formats streak stats with visuals and messages", () => {
+    const streak: Streak = {
+      current: 2,
+      longest: 5,
+      totalDays: 4,
+      reviewsToday: 1,
+      avgDailyReviews: 1,
+      lastReviewDate: "2025-09-14",
+    };
+    const html = fmtStreakHTML(streak);
+    expect(html).toContain("🔥 Your Study Streak");
+    expect(html).toContain("━━━━━━━━━━━━━━");
+    expect(html).toContain("📅 Current streak: 2 days");
+    expect(html).toContain("🔥🔥 (2 days) — Keep going to hit 3!");
+    expect(html).toContain("➡️ Only 3 more days to beat your record!");
+    expect(html).toContain("✨ Great job! Keep your streak alive today with /practice");
   });
 });

@@ -80,27 +80,43 @@ export function fmtStreakHTML(s: Streak) {
     s.avgDailyReviews == null ? "N/A" : s.avgDailyReviews.toFixed(1);
   const lastReview = s.lastReviewDate ?? "N/A";
 
-  let note = "";
-  if (current >= 30) {
-    note = "\n🏆 Amazing! You've maintained your streak for over a month!";
-  } else if (current >= 7) {
-    note = "\n⭐ Great job! You're on a weekly streak!";
-  } else if (current >= 3) {
-    note = "\n👍 Good work! Keep it up!";
+  const lines = [
+    "<b>🔥 Your Study Streak</b>",
+    "<code>━━━━━━━━━━━━━━</code>",
+    `📅 Current streak: ${current} days`,
+    `🏆 Longest streak: ${longest} days`,
+    `📊 Total study days: ${total}`,
+    `🔁 Reviews today: ${reviewsToday}`,
+    `📈 Avg daily reviews: ${avgDaily}`,
+    `📌 Last review: ${lastReview}`,
+  ];
+
+  const streakIcons = "🔥".repeat(Math.min(current, 10));
+  if (streakIcons) {
+    lines.push(`${streakIcons} (${current} day${current === 1 ? "" : "s"})${longest > current ? ` — Keep going to hit ${current + 1}!` : ""}`);
   }
 
-  return [
-    "<b>🔥 Your Study Streak</b>",
-    `Current streak: ${current} days`,
-    `Longest streak: ${longest} days`,
-    `Total study days: ${total}`,
-    `Reviews today: ${reviewsToday}`,
-    `Avg daily reviews: ${avgDaily}`,
-    `Last review: ${lastReview}`,
-    note,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  if (current === 3) {
+    lines.push("🎉 First 3-day streak!");
+  }
+  if (current >= longest && longest > 0) {
+    lines.push("🚀 Longest streak yet!");
+  } else if (longest > current) {
+    const diff = longest - current;
+    lines.push(`➡️ Only ${diff} more day${diff === 1 ? "" : "s"} to beat your record!`);
+  }
+
+  if (current >= 30) {
+    lines.push("🏆 Amazing! You've maintained your streak for over a month!");
+  } else if (current >= 7) {
+    lines.push("⭐ Great job! You're on a weekly streak!");
+  } else if (current >= 3) {
+    lines.push("👍 Good work! Keep it up!");
+  }
+
+  lines.push("✨ Great job! Keep your streak alive today with /practice");
+
+  return lines.join("\n");
 }
 
 export type Settings = {

@@ -39,6 +39,15 @@ export default async function handleStreakCommand(
       return {
         response: fmtStreakHTML(streak),
         parse_mode: "HTML",
+        inline_keyboard: {
+          inline_keyboard: [
+            [
+              { text: "📊 Stats", callback_data: "/stats" },
+              { text: "🗓 Weekly View", callback_data: "/streak week" },
+              { text: "🔔 Reminders", callback_data: "/reminders" },
+            ],
+          ],
+        },
       };
     } else {
       return {
