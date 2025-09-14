@@ -1,6 +1,6 @@
 # Telegram Vocabulary Bot - Mastra Edition
 
-A sophisticated vocabulary learning bot for Telegram that implements spaced repetition using the SM-2 algorithm. Built with the Mastra framework for workflow orchestration and advanced agent capabilities.
+A sophisticated vocabulary learning bot for Telegram that implements spaced repetition using the SM-2 algorithm. Built with the [Mastra framework](https://mastra.ai/en/docs) for workflow orchestration and advanced agent capabilities.
 
 ## Features
 
@@ -135,7 +135,7 @@ The bot will use **polling mode** in development (no webhook required).
 
 ## Architecture
 
-Built on the **Mastra Framework** with:
+Built on the **[Mastra framework](https://mastra.ai/en/docs)** with:
 
 - **Agent-based Workflows**: Orchestrated task execution with Inngest
 - **PostgreSQL Storage**: Persistent data with automatic migrations
