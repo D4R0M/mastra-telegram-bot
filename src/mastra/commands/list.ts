@@ -1,7 +1,7 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
 import { buildToolExecCtx } from "../context.js";
 import { listCardsTool } from "../tools/vocabularyTools.js";
-import { formatCard } from "./utils.js";
+import { formatCardListItem } from "./utils.js";
 
 export default async function handleListCommand(
   params: string[],
@@ -13,8 +13,10 @@ export default async function handleListCommand(
   const logger = mastra?.getLogger();
 
   try {
-    // Parse limit from params
+    // Parse pagination and sorting
     const limit = params.length > 0 ? parseInt(params[0]) : 20;
+    const offset = state?.data?.offset ?? 0;
+    const sort = state?.data?.sort ?? "date";
 
     const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
       requestId: userId,
@@ -23,7 +25,7 @@ export default async function handleListCommand(
       context: {
         owner_id: userId,
         limit: isNaN(limit) ? 20 : limit,
-        offset: 0,
+        offset,
         active_only: true,
       },
       runtimeContext,
@@ -32,25 +34,67 @@ export default async function handleListCommand(
     });
 
     if (result.success && result.cards && result.cards.length > 0) {
-      const cardsList = result.cards
-        .map(
-          (card: any, index: number) =>
-            `${index + 1}. ${formatCard(card, true)}`,
+      let cards = [...result.cards];
+      if (sort === "alpha") {
+        cards.sort((a: any, b: any) => a.front.localeCompare(b.front));
+      } else if (sort === "date") {
+        cards.sort(
+          (a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+      }
+
+      const cardsList = cards
+        .map((card: any, index: number) =>
+          formatCardListItem(card, offset + index + 1),
         )
         .join("\n\n");
 
-      const inline_keyboard = {
-        inline_keyboard: result.cards.map((card: any) => [
-          {
-            text: "Edit",
-            callback_data: `list:edit:${card.card_id || card.id}`,
-          },
-          {
-            text: "Delete",
-            callback_data: `list:delete:${card.card_id || card.id}`,
-          },
-        ]),
-      };
+      const keyboardRows: any[] = cards.map((card: any) => [
+        {
+          text: "Manage",
+          callback_data: `list:menu:${card.card_id || card.id}`,
+        },
+      ]);
+
+      const totalPages = Math.max(1, Math.ceil(result.total_found / limit));
+      const currentPage = Math.floor(offset / limit) + 1;
+      const paginationRow: any[] = [];
+      if (currentPage > 1) {
+        paginationRow.push({
+          text: "◀ Prev",
+          callback_data: `list:page:${offset - limit}:${sort}`,
+        });
+      }
+      paginationRow.push({
+        text: `Page ${currentPage}/${totalPages}`,
+        callback_data: "list:noop",
+      });
+      if (currentPage < totalPages) {
+        paginationRow.push({
+          text: "Next ▶",
+          callback_data: `list:page:${offset + limit}:${sort}`,
+        });
+      }
+      if (paginationRow.length) {
+        keyboardRows.push(paginationRow);
+      }
+
+      keyboardRows.push([
+        { text: "📅 Date", callback_data: `list:sort:date:${offset}` },
+        { text: "🔠 Alphabetical", callback_data: `list:sort:alpha:${offset}` },
+        {
+          text: "🔥 Review Count",
+          callback_data: `list:sort:review:${offset}`,
+        },
+      ]);
+
+      keyboardRows.push([
+        { text: "📂 By Tag", callback_data: "list:filter_tag" },
+        { text: "🔍 Search", callback_data: "list:filter_search" },
+      ]);
+
+      const inline_keyboard = { inline_keyboard: keyboardRows };
 
       return {
         response: `📚 <b>Your Vocabulary Cards (${result.total_found} total)</b>\n\n${cardsList}`,

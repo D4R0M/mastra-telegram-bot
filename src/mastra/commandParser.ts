@@ -851,6 +851,10 @@ export async function handleListCallback(
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
 
+  if (action === "noop") {
+    return { response: "", parse_mode: "HTML" };
+  }
+
   if (action === "edit") {
     const state: ConversationState = {
       mode: "edit_card",
@@ -871,6 +875,51 @@ export async function handleListCallback(
     };
   }
 
+  if (action === "menu") {
+    const inline_keyboard = {
+      inline_keyboard: [
+        [{ text: "✏️ Edit Word", callback_data: `list:edit:${cardId}` }],
+        [{ text: "🗑 Delete", callback_data: `list:delete:${cardId}` }],
+        [{ text: "📌 Add/Remove Tag", callback_data: `list:tag:${cardId}` }],
+      ],
+    };
+    return {
+      response: "Manage this card:",
+      parse_mode: "HTML",
+      inline_keyboard,
+    };
+  }
+
+  if (action === "page" || action === "sort") {
+    const [param, sort] = cardId.split(":");
+    const offset =
+      action === "page" ? parseInt(param) || 0 : parseInt(sort) || 0;
+    const chosenSort = action === "page" ? sort || "date" : param;
+    const listHandler = commandRegistry["/list"];
+    if (listHandler) {
+      const state: ConversationState = {
+        mode: "list_view",
+        step: 0,
+        data: { offset, sort: chosenSort },
+      };
+      return listHandler([], "", userId, state, mastra);
+    }
+  }
+
+  if (action === "tag") {
+    return {
+      response: "Tag management coming soon.",
+      parse_mode: "HTML",
+    };
+  }
+
+  if (action === "filter_tag" || action === "filter_search") {
+    return {
+      response: "Filtering coming soon.",
+      parse_mode: "HTML",
+    };
+  }
+
   logger?.warn("Unknown list callback action", { action, cardId });
   return {
     response: "❌ Unknown action",
@@ -887,7 +936,9 @@ export async function handleSettingsCallback(
 
   try {
     if (action === "toggle_reminders") {
-      const { getReminderSettingsTool } = await import("./tools/reminderTools.js");
+      const { getReminderSettingsTool } = await import(
+        "./tools/reminderTools.js"
+      );
       const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
         requestId: userId,
       });
@@ -913,9 +964,7 @@ export async function handleSettingsCallback(
           return settingsHandler([], "", userId, undefined, mastra);
         }
         return {
-          response: toggled
-            ? "✅ Reminders enabled"
-            : "🔕 Reminders disabled",
+          response: toggled ? "✅ Reminders enabled" : "🔕 Reminders disabled",
           parse_mode: "HTML",
         };
       }
@@ -927,8 +976,7 @@ export async function handleSettingsCallback(
 
     if (action === "change_timezone") {
       return {
-        response:
-          "🌍 Please enter your timezone (e.g., Europe/Stockholm)",
+        response: "🌍 Please enter your timezone (e.g., Europe/Stockholm)",
         conversationState: {
           mode: "settings_menu",
           step: 2,
