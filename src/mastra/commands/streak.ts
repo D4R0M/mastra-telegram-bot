@@ -1,6 +1,7 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
 import { buildToolExecCtx } from "../context.js";
 import { getStreakStatsTool } from "../tools/statisticsTools.js";
+import { fmtStreakHTML, type Streak } from "../ui/format.js";
 
 export default async function handleStreakCommand(
   params: string[],
@@ -26,34 +27,17 @@ export default async function handleStreakCommand(
     });
 
     if (result.success && result.stats) {
-      const stats = result.stats;
-      const streakText = [
-        "🔥 <b>Your Study Streak</b>\n",
-        `Current Streak: ${stats.current_streak} days`,
-        `Longest Streak: ${stats.longest_streak} days`,
-        `Total Study Days: ${stats.total_study_days}`,
-        `Reviews Today: ${stats.reviews_today}`,
-        `Average Daily Reviews: ${stats.average_daily_reviews.toFixed(1)}`,
-      ];
-
-      if (stats.last_review_date) {
-        streakText.push(`Last Review: ${stats.last_review_date}`);
-      }
-
-      if (stats.current_streak > 0) {
-        if (stats.current_streak >= 30) {
-          streakText.push(
-            "\n🏆 Amazing! You've maintained your streak for over a month!",
-          );
-        } else if (stats.current_streak >= 7) {
-          streakText.push("\n⭐ Great job! You're on a weekly streak!");
-        } else if (stats.current_streak >= 3) {
-          streakText.push("\n👍 Good work! Keep it up!");
-        }
-      }
-
+      const raw = result.stats;
+      const streak: Streak = {
+        current: raw.current_streak ?? null,
+        longest: raw.longest_streak ?? null,
+        totalDays: raw.total_study_days ?? null,
+        reviewsToday: raw.reviews_today ?? null,
+        avgDailyReviews: raw.average_daily_reviews ?? null,
+        lastReviewDate: raw.last_review_date ?? null,
+      };
       return {
-        response: streakText.join("\n"),
+        response: fmtStreakHTML(streak),
         parse_mode: "HTML",
       };
     } else {

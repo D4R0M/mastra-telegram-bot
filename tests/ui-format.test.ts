@@ -28,8 +28,8 @@ describe('format helpers', () => {
       newTodayPct: null,
     };
     const html = fmtStatsHTML(stats);
-    expect(html).toContain('Total cards: 0');
-    expect(html).toContain('Retention (30d): N/A');
+    expect(html).toContain('🗂️ <b>Total cards:</b> 0');
+    expect(html).toContain('<b>Retention (30d):</b> N/A');
     expect(html).not.toContain('undefined');
   });
 });

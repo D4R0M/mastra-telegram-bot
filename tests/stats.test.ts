@@ -78,7 +78,7 @@ describe('stats command', () => {
     });
     const res = await handleStatsCommand([], '', 'user');
     expect(res.response).toContain('🗂️ <b>Total cards:</b> 0');
-    expect(res.response).toContain('Ease avg: N/A');
-    expect(res.response).toContain('Retention (30d): N/A');
+    expect(res.response).toContain('<b>Ease avg:</b> N/A');
+    expect(res.response).toContain('<b>Retention (30d):</b> N/A');
   });
 });
