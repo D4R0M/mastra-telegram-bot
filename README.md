@@ -116,6 +116,8 @@ The bot will use **polling mode** in development (no webhook required).
 - `PORT`: Server port (Railway sets this automatically)
 - `INNGEST_CONFIG`: Custom Inngest configuration path
 - `ALLOWED_USER_IDS`: Comma-separated Telegram user IDs allowed to use the bot
+- `GITHUB_TOKEN`: GitHub personal access token used by `/check_reviews` to query review statistics and, when `GITHUB_USERNAME` is not set, to determine your GitHub login
+- `GITHUB_USERNAME`: GitHub login for `/check_reviews` (optional if `GITHUB_TOKEN` is provided)
 
 ### API Endpoints
 
