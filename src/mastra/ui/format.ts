@@ -150,40 +150,75 @@ export function fmtStartHTML() {
   ].join("\n");
 }
 
-export function fmtHelpHTML() {
+export function fmtHelpHTML(section: string = "main") {
+  if (section === "core") {
+    return [
+      "<b>📌 Core Commands</b>",
+      "",
+      "⭐ <b>Quick Start</b>",
+      "/add → Add a card",
+      "/practice → Start a review",
+      "/due → See due cards",
+      "",
+      "/list → Show all your cards",
+      "/stats → View learning statistics",
+      "/streak → Check study streak",
+      "",
+      "🎯 <b>Grading Scale</b>",
+      "0️⃣ Failure",
+      "1️⃣ Incorrect, saw answer",
+      "2️⃣ Incorrect, but easy",
+      "3️⃣ Correct, difficult 😅",
+      "4️⃣ Correct, hesitant",
+      "5️⃣ Perfect recall 🚀",
+    ].join("\n");
+  }
+
+  if (section === "cards") {
+    return [
+      "<b>🗂 Card Management</b>",
+      "",
+      "/edit [id] → Edit a card",
+      "/delete [id] → Delete a card",
+      "/export → Export cards to CSV",
+      "/import → Import cards from CSV",
+    ].join("\n");
+  }
+
+  if (section === "settings") {
+    return [
+      "<b>⚙️ Settings</b>",
+      "",
+      "/settings → View settings",
+      "/reset → Reset to defaults",
+    ].join("\n");
+  }
+
+  if (section === "quickadd") {
+    return [
+      "<b>⚡ Quick Add</b>",
+      "",
+      "/add word | translation",
+      "/add word :: translation",
+      "/add word | translation | tag | example",
+      "",
+      "📝 <b>Example: Adding a card</b>",
+      "/add prejudice | Making a judgement before you know the full picture",
+    ].join("\n");
+  }
+
   return [
-    "<b>📚 Vocabulary Learning Bot Commands</b>",
+    "<b>📚 Help Menu</b>",
     "",
-    "<b>Core Commands:</b>",
-    "/add - Add a new vocabulary card",
-    "/practice - Start a review session",
-    "/list - Show all your cards",
-    "/due - Check cards due for review",
-    "/stats - View your learning statistics",
-    "/streak - Check your study streak",
+    "⭐ <b>Quick Start</b>",
+    "/add → Add a card",
+    "/practice → Start a review",
+    "/due → See due cards",
     "",
-    "<b>Card Management:</b>",
-    "/edit [id] - Edit a card",
-    "/delete [id] - Delete a card",
-    "/export csv - Export cards to CSV",
-    "/import - Import cards from CSV",
+    "Use the buttons below to explore more commands.",
     "",
-    "<b>Settings:</b>",
-    "/settings - View your settings",
-    "/reset - Reset settings to defaults",
-    "",
-    "<b>Quick Add Formats:</b>",
-    "/add word | translation",
-    "/add word :: translation",
-    "/add word | translation | tags | example",
-    "",
-    "<i>During reviews, grade yourself 0-5:</i>",
-    "0 = Complete failure",
-    "1 = Incorrect, saw answer",
-    "2 = Incorrect, but easy",
-    "3 = Correct, difficult",
-    "4 = Correct, hesitated",
-    "5 = Perfect recall",
+    "💡 Tip: Start your day with /due to never miss a review!",
+    "🔥 Keep up your streak with /practice daily.",
   ].join("\n");
 }
 

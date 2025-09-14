@@ -9,9 +9,22 @@ export default async function handleHelpCommand(
   mastra?: any,
 ): Promise<CommandResponse> {
   const showKeyboard = params.includes("__with_keyboard");
+  const page = params.find((p) => !p.startsWith("__"))?.toLowerCase();
   const response: CommandResponse = {
-    response: fmtHelpHTML(),
+    response: fmtHelpHTML(page),
     parse_mode: "HTML",
+    inline_keyboard: {
+      inline_keyboard: [
+        [
+          { text: "📌 Core", callback_data: "/help core" },
+          { text: "🗂 Cards", callback_data: "/help cards" },
+        ],
+        [
+          { text: "⚙ Settings", callback_data: "/help settings" },
+          { text: "⚡ Quick Add", callback_data: "/help quickadd" },
+        ],
+      ],
+    },
   };
 
   if (showKeyboard) {
