@@ -7,7 +7,6 @@ import {
 } from "./commandParser.js";
 import { handleExportCallback } from "./commands/exportCallback.js";
 import { commandRegistry } from "./commands/index.js";
-import { handleCheckReviewsExport } from "./commands/checkReviews.js";
 import {
   getConversationState,
   saveConversationState,
@@ -126,22 +125,6 @@ export async function processTelegramUpdate(
         const action = data.split(":")[1];
         result = await handleExportCallback(action, existingState);
         commandHandled = `callback_export_${action}`;
-      } else if (data.startsWith("check_reviews_export:")) {
-        const range = data.split(":")[1];
-        result = await handleCheckReviewsExport(range as any, userIdStr, mastra);
-        commandHandled = `callback_check_reviews_export_${range}`;
-      } else if (
-        data.startsWith("check_reviews:") ||
-        data.startsWith("check_reviews_refresh:")
-      ) {
-        const parts = data.split(":");
-        const range = parts[1];
-        const handler = commandRegistry["/check_reviews"];
-        if (handler) {
-          result = await handler([range], range, userIdStr, undefined, mastra);
-          result.edit_message_id = update.callback_query.message?.message_id?.toString();
-        }
-        commandHandled = `callback_check_reviews_${range}`;
       } else if (data.startsWith("grade:")) {
         const grade = data.split(":")[1];
         result = await processCommand(
