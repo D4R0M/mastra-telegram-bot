@@ -1,5 +1,23 @@
-import { isAuthorizedTelegramUser } from "./authorization.js";
 import type { Mastra } from "@mastra/core";
+import {
+  parseCommand,
+  processCommand,
+  handleListCallback,
+  handleSettingsCallback,
+} from "./commandParser.js";
+import {
+  getConversationState,
+  saveConversationState,
+} from "./conversationStateStorage.js";
+import { isAuthorizedTelegramUser } from "./authorization.js";
+
+export function resolveChatId(update: any): string | undefined {
+  return (
+    update?.message?.chat?.id?.toString() ||
+    update?.callback_query?.message?.chat?.id?.toString() ||
+    update?.channel_post?.chat?.id?.toString()
+  );
+}
 
 // Simple in-memory idempotency guard
 const seenUpdates = new Set<number>();
@@ -19,12 +37,16 @@ export async function processTelegramUpdate(
     seenUpdates.add(updateId);
   }
 
-  const chatId =
-    update?.message?.chat?.id || update?.callback_query?.message?.chat?.id;
-  const userId = update?.message?.from?.id || update?.callback_query?.from?.id;
+  const chatId = resolveChatId(update);
+  const from =
+    update?.message?.from ||
+    update?.callback_query?.from ||
+    update?.channel_post?.from;
+  const userId = from?.id;
+  const username = from?.username;
 
   if (!isAuthorizedTelegramUser(userId)) {
-    logger?.warn("unauthorized", { userId });
+    logger?.warn("unauthorized", { userId, username });
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (token && chatId) {
       try {
@@ -47,27 +69,114 @@ export async function processTelegramUpdate(
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const text = update?.message?.text ?? "";
   if (!token || !chatId) {
     logger?.error("missing_token_or_chat", { update_id: updateId });
     return;
   }
 
   try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${token}/sendMessage`,
-      {
+    const userIdStr = String(userId);
+    const { state: existingState, expired } = await getConversationState(
+      userIdStr,
+    );
+    let result;
+    let commandHandled = "fallback";
+
+    if (update?.callback_query?.data) {
+      const data = update.callback_query.data.trim();
+      if (data.startsWith("list:")) {
+        const [, action, cardId] = data.split(":");
+        result = await handleListCallback(action, cardId, userIdStr, mastra);
+        commandHandled = `callback_list_${action}`;
+      } else if (data.startsWith("settings:")) {
+        const action = data.split(":")[1];
+        result = await handleSettingsCallback(action, userIdStr, mastra);
+        commandHandled = `callback_settings_${action}`;
+      } else {
+        result = await processCommand(
+          data,
+          userIdStr,
+          chatId,
+          existingState,
+          mastra,
+          expired,
+        );
+        const parsed = parseCommand(data);
+        if (parsed?.command) {
+          commandHandled = parsed.command.replace(/^\//, "");
+        }
+      }
+      if (update.callback_query.id) {
+        await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            callback_query_id: update.callback_query.id,
+          }),
+        }).catch(() => {});
+      }
+    } else {
+      const text =
+        update?.message?.text || update?.channel_post?.text || "";
+      result = await processCommand(
+        text,
+        userIdStr,
+        chatId,
+        existingState,
+        mastra,
+        expired,
+      );
+      const parsed = parseCommand(text);
+      if (parsed?.command) {
+        commandHandled = parsed.command.replace(/^\//, "");
+      }
+    }
+
+    if (result.conversationState !== existingState) {
+      await saveConversationState(userIdStr, result.conversationState);
+    }
+
+    const body: any = {
+      chat_id: chatId,
+      text: result.response,
+      parse_mode: result.parse_mode || "HTML",
+    };
+    if (result.inline_keyboard) {
+      body.reply_markup = result.inline_keyboard;
+    } else if (result.reply_keyboard) {
+      body.reply_markup = result.reply_keyboard;
+    } else if (result.remove_keyboard) {
+      body.reply_markup = { remove_keyboard: true };
+    }
+    if (result.edit_message_id) {
+      body.message_id = result.edit_message_id;
+      await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      },
-    );
-    const data: any = await res.json().catch(() => ({}));
-    const messageId = data?.result?.message_id;
-    logger?.info("reply_sent", {
+        body: JSON.stringify(body),
+      });
+    } else {
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const data: any = await res.json().catch(() => ({}));
+      const sentMessageId = data?.result?.message_id;
+      logger?.info("reply_sent", {
+        update_id: updateId,
+        ms: Date.now() - start,
+        message_id: sentMessageId,
+      });
+    }
+
+    logger?.info("command_handled", {
       update_id: updateId,
-      ms: Date.now() - start,
-      message_id: messageId,
+      chat_id: chatId,
+      command: commandHandled,
     });
   } catch (err) {
     logger?.error("process_error", {
