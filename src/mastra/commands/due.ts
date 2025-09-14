@@ -1,6 +1,7 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
 import { buildToolExecCtx } from "../context.js";
 import { getDueCardsStatsTool } from "../tools/statisticsTools.js";
+import { fmtDueHTML, type DueSummary } from "../ui/format.js";
 
 export default async function handleDueCommand(
   params: string[],
@@ -26,29 +27,41 @@ export default async function handleDueCommand(
     });
 
     if (result.success && result.stats) {
-      const stats = result.stats;
-      const dueText = [
-        "📋 <b>Cards Due for Review</b>\n",
-        `Total Cards: ${stats.total_cards}`,
-        `Due Today: ${stats.cards_due_today}`,
-        `Due Tomorrow: ${stats.cards_due_tomorrow}`,
-        `New Cards: ${stats.new_cards}`,
-        `Learning Cards: ${stats.learning_cards}`,
-        `Review Cards: ${stats.review_cards}`,
-        `Overdue Cards: ${stats.overdue_cards}`,
-      ];
+      const s = result.stats;
+      const summary: DueSummary = {
+        total: s.total_cards,
+        dueToday: s.cards_due_today,
+        dueTomorrow: s.cards_due_tomorrow,
+        new: s.new_cards,
+        learning: s.learning_cards,
+        review: s.review_cards,
+        overdue: s.overdue_cards,
+      };
 
-      if (stats.cards_due_today > 0) {
-        dueText.push(
-          "\n💡 <i>Start your review session with</i> <code>/practice</code>",
-        );
-      } else {
-        dueText.push("\n✨ <i>All caught up! No cards due today.</i>");
+      if (params[0] === "compact" || params[0] === "short") {
+        return {
+          response: `📊 Today: ${summary.dueToday} due | ${summary.new} new | ${summary.overdue} overdue → /practice`,
+          parse_mode: "HTML",
+        };
       }
 
       return {
-        response: dueText.join("\n"),
+        response: fmtDueHTML(summary),
         parse_mode: "HTML",
+        inline_keyboard: {
+          inline_keyboard: [
+            [
+              { text: "▶️ Start Practice", callback_data: "practice_now" },
+              { text: "➕ Add Card", callback_data: "add_card" },
+              { text: "📂 Export", callback_data: "export_cards" },
+            ],
+            [
+              { text: "📖 Only Learning", callback_data: "practice_learning" },
+              { text: "🆕 Only New", callback_data: "practice_new" },
+              { text: "⚠️ Overdue", callback_data: "practice_overdue" },
+            ],
+          ],
+        },
       };
     } else {
       return {

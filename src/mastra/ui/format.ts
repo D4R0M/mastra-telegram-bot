@@ -62,6 +62,46 @@ export function fmtStatsHTML(s: Stats) {
   ].join("\n");
 }
 
+export type DueSummary = {
+  total: number;
+  dueToday: number;
+  dueTomorrow: number;
+  new: number;
+  learning: number;
+  review: number;
+  overdue: number;
+};
+
+export function fmtDueHTML(d: DueSummary) {
+  const loadTotal = d.dueToday + d.overdue;
+  const loadPct = loadTotal ? d.dueToday / loadTotal : 0;
+  const loadBar = bar(loadPct, 10, "■", "□");
+  const lines = [
+    "📊 <b>Cards Due for Review</b>",
+    "",
+    `🃏 Total: ${d.total}`,
+    `✅ Due Today: ${d.dueToday}`,
+    `📅 Due Tomorrow: ${d.dueTomorrow}`,
+    `🆕 New Cards: ${d.new}`,
+    "",
+    `📖 Learning: ${d.learning}`,
+    `🔁 Review: ${d.review}`,
+    `⚠️ Overdue: ${d.overdue}`,
+    "",
+    "<b>Today's Load</b>",
+    `<code>${loadBar}</code> ${pctStr(loadPct)}`,
+  ];
+  if (d.dueToday > 0) {
+    lines.push(
+      "",
+      `✨ Great job keeping up! Finish ${d.dueToday} reviews today to stay on track.`,
+    );
+  } else {
+    lines.push("", "✨ All caught up! No cards due today.");
+  }
+  return lines.join("\n");
+}
+
 export type Streak = {
   current: number | null;
   longest: number | null;
