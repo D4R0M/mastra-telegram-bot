@@ -76,17 +76,18 @@ export async function processTelegramUpdate(
 
   try {
     const userIdStr = String(userId);
-    const { state: existingState, expired } = await getConversationState(
-      userIdStr,
-    );
+    const { state: existingState, expired } =
+      await getConversationState(userIdStr);
     let result;
     let commandHandled = "fallback";
 
     if (update?.callback_query?.data) {
       const data = update.callback_query.data.trim();
       if (data.startsWith("list:")) {
-        const [, action, cardId] = data.split(":");
-        result = await handleListCallback(action, cardId, userIdStr, mastra);
+        const parts = data.split(":");
+        const action = parts[1];
+        const payload = parts.slice(2).join(":");
+        result = await handleListCallback(action, payload, userIdStr, mastra);
         commandHandled = `callback_list_${action}`;
       } else if (data.startsWith("settings:")) {
         const action = data.split(":")[1];
@@ -133,17 +134,19 @@ export async function processTelegramUpdate(
         }
       }
       if (update.callback_query.id) {
-        await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            callback_query_id: update.callback_query.id,
-          }),
-        }).catch(() => {});
+        await fetch(
+          `https://api.telegram.org/bot${token}/answerCallbackQuery`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: update.callback_query.id,
+            }),
+          },
+        ).catch(() => {});
       }
     } else {
-      const text =
-        update?.message?.text || update?.channel_post?.text || "";
+      const text = update?.message?.text || update?.channel_post?.text || "";
       result = await processCommand(
         text,
         userIdStr,

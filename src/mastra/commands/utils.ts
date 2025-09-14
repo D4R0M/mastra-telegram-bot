@@ -12,6 +12,18 @@ export function formatCard(card: any, showId: boolean = false): string {
   return result;
 }
 
+export function formatCardListItem(card: any, index: number): string {
+  const lines = [
+    `#${index}`,
+    `📖 Word: <b>${card.front}</b>`,
+    `📝 Meaning: ${card.back}`,
+  ];
+  if (card.tags && card.tags.length > 0) {
+    lines.push(`🏷 Tags: ${card.tags.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
 function safeNum(value: unknown, fallback = 0): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
