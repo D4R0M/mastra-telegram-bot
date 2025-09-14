@@ -77,6 +77,52 @@ export function parseCommand(message: string): ParsedCommand | null {
   };
 }
 
+// Utility functions for fuzzy matching and normalization
+function normalizeText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  const matrix = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array(b.length + 1).fill(0),
+  );
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function similarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshtein(a, b) / maxLen;
+}
+
+function tokenOverlap(a: string, b: string): number {
+  const aTokens = a.split(/\s+/).filter(Boolean);
+  const bTokens = b.split(/\s+/).filter(Boolean);
+  if (!aTokens.length) return 0;
+  const bSet = new Set(bTokens);
+  let match = 0;
+  for (const t of aTokens) {
+    if (bSet.has(t)) match++;
+  }
+  return match / aTokens.length;
+}
+
 // ===============================
 // Conversation State Handlers
 // ===============================
@@ -280,6 +326,7 @@ async function handleReviewSessionFlow(
       ) {
         // Show the answer with inline keyboard buttons
         const card = state.data.current_card;
+        const progressLine = `Card ${state.data.current_index}/${state.data.total_cards}`;
         const inline_keyboard = {
           inline_keyboard: [
             [
@@ -317,7 +364,7 @@ async function handleReviewSessionFlow(
 
         const newStateData = structuredClone(state.data);
         return {
-          response: `💡 <b>Answer:</b> ${card.back}\n\n${card.example ? `<i>Example: ${card.example}</i>\n\n` : ""}How well did you recall this?`,
+          response: `${progressLine}\nFront: <b>${card.front}</b>\n\n💡 <b>Answer:</b> ${card.back}\n\n${card.example ? `<i>Example: ${card.example}</i>\n\n` : ""}How well did you recall this?`,
           conversationState: {
             mode: "review_session",
             step: 2,
@@ -331,7 +378,22 @@ async function handleReviewSessionFlow(
         const card = state.data.current_card;
         const userAnswer = message.trim();
         const cardBack = card.back || "";
-        const isCorrect = userAnswer.toLowerCase() === cardBack.toLowerCase();
+        const normalizedUser = normalizeText(userAnswer);
+        const normalizedBack = normalizeText(cardBack);
+        const isExact = normalizedUser === normalizedBack;
+        const lev = levenshtein(normalizedUser, normalizedBack);
+        const overlap = tokenOverlap(normalizedUser, normalizedBack);
+        let feedback = "";
+        if (isExact) {
+          feedback = "✅ Correct!";
+        } else if (lev <= 2) {
+          feedback = "💡 Close! Just a small typo.";
+        } else if (overlap >= 0.5) {
+          feedback = "➡️ Partial meaning match — you decide the grade.";
+        } else {
+          feedback = "❌ Not quite.";
+        }
+        const progressLine = `Card ${state.data.current_index}/${state.data.total_cards}`;
 
         const inline_keyboard = {
           inline_keyboard: [
@@ -370,7 +432,7 @@ async function handleReviewSessionFlow(
 
         const newStateData = structuredClone(state.data);
         return {
-          response: `Your answer: <b>${userAnswer}</b>\nCorrect answer: <b>${cardBack}</b>\n\n${isCorrect ? "✅ Correct!" : "❌ Not quite."}\n\n${card.example ? `<i>Example: ${card.example}</i>\n\n` : ""}Rate your recall:`,
+          response: `${progressLine}\nFront: <b>${card.front}</b>\nYour answer: <b>${userAnswer}</b>\nCorrect: <b>${cardBack}</b>\n\n${feedback}\n\n${card.example ? `<i>Example: ${card.example}</i>\n\n` : ""}Select a grade:`,
           conversationState: {
             mode: "review_session",
             step: 2,
@@ -417,6 +479,9 @@ async function handleReviewSessionFlow(
             (state.data.correct_count || 0) + (wasCorrect ? 1 : 0);
           const updatedIncorrect =
             (state.data.incorrect_count || 0) + (wasCorrect ? 0 : 1);
+          const newStreak = wasCorrect
+            ? (state.data.correct_streak || 0) + 1
+            : 0;
 
           // Check if there are more cards in the session
           const nextIndex = (state.data.current_index || 1) + 1;
@@ -425,8 +490,13 @@ async function handleReviewSessionFlow(
 
           if (hasMoreCards) {
             const nextCard = state.data.all_cards[nextIndex - 1];
+            const progressLine = `Card ${nextIndex}/${state.data.total_cards}`;
+            const streakLine =
+              newStreak > 0 ? ` | ✅ Correct streak: ${newStreak}` : "";
+            const motivationLine =
+              newStreak >= 3 ? "\n🔥 You’re on a roll!" : "";
             return {
-              response: `${grade >= 3 ? "✅" : "📝"} Recorded (Grade: ${grade})\n\n<b>Card ${nextIndex}/${state.data.total_cards}</b>\n\n❓ <b>${nextCard.front}</b>\n\n<i>Try to recall the answer, then type your response or type \"show\" to reveal.</i>`,
+              response: `${grade >= 3 ? "✅" : "📝"} Recorded (Grade: ${grade})\n\n${progressLine}${streakLine}${motivationLine}\n\n❓ <b>${nextCard.front}</b>\n\n<i>Try to recall the answer, then type your response or type \"show\" to reveal.</i>`,
               conversationState: {
                 mode: "review_session",
                 step: 1,
@@ -440,6 +510,7 @@ async function handleReviewSessionFlow(
                   correct_count: updatedCorrect,
                   incorrect_count: updatedIncorrect,
                   session_start: state.data.session_start,
+                  correct_streak: newStreak,
                 },
               },
               parse_mode: "HTML",
