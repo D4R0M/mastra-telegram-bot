@@ -305,12 +305,13 @@ async function handleReviewSessionFlow(
           ],
         };
 
+        const newStateData = structuredClone(state.data);
         return {
           response: `💡 <b>Answer:</b> ${card.back}\n\n${card.example ? `<i>Example: ${card.example}</i>\n\n` : ""}How well did you recall this?`,
           conversationState: {
             mode: "review_session",
             step: 2,
-            data: state.data,
+            data: newStateData,
           },
           inline_keyboard,
           parse_mode: "HTML",
@@ -357,12 +358,13 @@ async function handleReviewSessionFlow(
           ],
         };
 
+        const newStateData = structuredClone(state.data);
         return {
           response: `Your answer: <b>${userAnswer}</b>\nCorrect answer: <b>${cardBack}</b>\n\n${isCorrect ? "✅ Correct!" : "❌ Not quite."}\n\n${card.example ? `<i>Example: ${card.example}</i>\n\n` : ""}Rate your recall:`,
           conversationState: {
             mode: "review_session",
             step: 2,
-            data: state.data,
+            data: newStateData,
           },
           inline_keyboard,
           parse_mode: "HTML",
@@ -894,8 +896,7 @@ export async function processCommand(
   if (stateExpired) {
     await clearConversationState(userId);
     return {
-      response:
-        "Session timed out—please start again with /add or /practice",
+      response: "Session timed out—please start again with /add or /practice",
       conversationState: undefined,
       parse_mode: "HTML",
       remove_keyboard: true,

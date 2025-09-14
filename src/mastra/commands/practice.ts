@@ -44,11 +44,13 @@ export default async function handlePracticeCommand(
       runtimeContext: startRuntimeContext,
       tracingContext: startTracingContext,
     } = buildToolExecCtx(mastra, { requestId: userId });
+    // Generate a single session ID and use it consistently
+    const sessionId = `session_${userId}_${Date.now()}`;
     const startResult = await startReviewTool.execute({
       context: {
         owner_id: userId,
         card_id: dueResult.cards[0].card_id, // Start with first due card
-        session_id: `session_${userId}_${Date.now()}`,
+        session_id: sessionId,
       },
       runtimeContext: startRuntimeContext,
       tracingContext: startTracingContext,
@@ -61,7 +63,6 @@ export default async function handlePracticeCommand(
         ...startResult.card,
         back: startResult.card.back ?? dueResult.cards[0].back,
       };
-      const sessionId = `session_${userId}_${Date.now()}`;
       const currentIndex = 1;
       const totalCards = dueResult.cards.length;
       return {
