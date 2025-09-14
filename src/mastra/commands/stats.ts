@@ -1,7 +1,7 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
 import { buildToolExecCtx } from "../context.js";
 import { getComprehensiveStatsTool } from "../tools/statisticsTools.js";
-import { formatStatistics } from "./utils.js";
+import { fmtStatsHTML, type Stats } from "../ui/format.js";
 
 export default async function handleStatsCommand(
   params: string[],
@@ -28,10 +28,40 @@ export default async function handleStatsCommand(
     });
 
     if (result.success && result.stats) {
-      const stats = result.stats;
+      const raw = result.stats;
+      const stats: Stats = {
+        totalCards: raw.due_cards?.total_cards ?? null,
+        dueToday: raw.due_cards?.cards_due_today ?? null,
+        newToday: raw.due_cards?.new_cards ?? null,
+        avgEase: raw.due_cards?.average_ease ?? null,
+        retentionRate:
+          raw.retention?.retention_rate != null
+            ? raw.retention.retention_rate / 100
+            : null,
+        retentionDelta:
+          raw.retention?.success_rate_last_30_days != null &&
+          raw.retention?.retention_rate != null
+            ? (raw.retention.success_rate_last_30_days -
+                raw.retention.retention_rate) /
+              100
+            : null,
+        currentStreakDays: raw.streaks?.current_streak ?? null,
+        longestStreakDays: raw.streaks?.longest_streak ?? null,
+        dueNowPct: null,
+        newTodayPct: null,
+      };
       return {
-        response: formatStatistics(stats),
+        response: fmtStatsHTML(stats),
         parse_mode: "HTML",
+        inline_keyboard: {
+          inline_keyboard: [
+            [
+              { text: "▶️ Practice now", callback_data: "practice_now" },
+              { text: "➕ Add card", callback_data: "add_card" },
+              { text: "📈 Detail", callback_data: "open_stats_detail" },
+            ],
+          ],
+        },
       };
     } else {
       return {
