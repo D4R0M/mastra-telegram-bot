@@ -359,3 +359,80 @@ export async function getReviewStats(
     review_cards: parseInt(stats.review_cards),
   };
 }
+
+export interface ReviewEvent {
+  card_id: string;
+  ts_shown: Date;
+  ts_answered: Date;
+  grade: number;
+  scheduled_at: Date;
+  prev_review_at?: Date | null;
+  prev_interval_days: number;
+  due_interval_days: number;
+  was_overdue: boolean;
+  ease_factor: number;
+  repetition: number;
+  lapses: number;
+  is_new: boolean;
+  answer_latency_ms: number;
+  session_id?: string;
+  position_in_session?: number;
+  time_of_day_bucket: string;
+  weekday: number;
+}
+
+export async function logReview(
+  data: ReviewEvent,
+  client?: PoolClient,
+): Promise<void> {
+  const pool = client || getPool();
+
+  await pool.query(
+    `
+    INSERT INTO reviews (
+      card_id,
+      ts_shown,
+      ts_answered,
+      grade,
+      scheduled_at,
+      prev_review_at,
+      prev_interval_days,
+      due_interval_days,
+      was_overdue,
+      ease_factor,
+      repetition,
+      lapses,
+      is_new,
+      answer_latency_ms,
+      session_id,
+      position_in_session,
+      time_of_day_bucket,
+      weekday
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+      $11, $12, $13, $14, $15, $16, $17, $18
+    )
+  `,
+    [
+      data.card_id,
+      data.ts_shown,
+      data.ts_answered,
+      data.grade,
+      data.scheduled_at,
+      data.prev_review_at,
+      data.prev_interval_days,
+      data.due_interval_days,
+      data.was_overdue,
+      data.ease_factor,
+      data.repetition,
+      data.lapses,
+      data.is_new,
+      data.answer_latency_ms,
+      data.session_id,
+      data.position_in_session,
+      data.time_of_day_bucket,
+      data.weekday,
+    ],
+  );
+}

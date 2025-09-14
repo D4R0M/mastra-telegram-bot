@@ -467,6 +467,7 @@ async function handleReviewSessionFlow(
             start_time: state.data.start_time || Date.now() - 10000,
             grade: grade,
             session_id: state.data.session_id,
+            position_in_session: state.data.current_index,
           },
           runtimeContext,
           tracingContext,
