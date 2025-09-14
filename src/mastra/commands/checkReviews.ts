@@ -9,7 +9,8 @@ import type { CommandResponse, ConversationState } from "../commandParser.js";
 async function fetchGithubReviewStats(): Promise<string> {
   const username = process.env.GITHUB_USERNAME;
   const token = process.env.GITHUB_TOKEN;
-  if (!username) throw new Error("GITHUB_USERNAME not set");
+  if (!username)
+    return "GitHub username not configured. Set GITHUB_USERNAME to enable review stats.";
 
   const headers: Record<string, string> = { "User-Agent": "mastra-bot" };
   if (token) headers.Authorization = `Bearer ${token}`;
