@@ -38,6 +38,7 @@ import {
   saveConversationState,
 } from "./conversationStateStorage.js";
 import { buildToolExecCtx } from "./context.js";
+import { isAuthorizedTelegramUser } from "./authorization.js";
 import { handleListCallback } from "./commandParser.js";
 import {
   getReminderSettingsTool,
@@ -235,32 +236,62 @@ export const mastra = new Mastra({
             try {
               const payload = await c.req.json();
 
+              const chatId =
+                payload?.message?.chat?.id ||
+                payload?.callback_query?.message?.chat?.id;
+              const userId =
+                payload?.message?.from?.id || payload?.callback_query?.from?.id;
+
               logger?.info("📝 [Telegram] Received", {
                 type: payload?.message
                   ? "message"
                   : payload?.callback_query
                     ? "callback"
                     : "unknown",
-                chatId:
-                  payload?.message?.chat?.id ||
-                  payload?.callback_query?.message?.chat?.id,
-                userId:
-                  payload?.message?.from?.id ||
-                  payload?.callback_query?.from?.id,
+                chatId,
+                userId,
               });
+
+              if (!isAuthorizedTelegramUser(userId)) {
+                logger?.warn("🚫 [Telegram] Unauthorized access attempt", {
+                  userId,
+                });
+                const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+                if (TELEGRAM_BOT_TOKEN && chatId) {
+                  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+                  const options = {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: chatId,
+                      text: "Sorry, you are not authorized to use this bot.",
+                    }),
+                  } as const;
+                  try {
+                    await fetch(url, options);
+                  } catch (err) {
+                    logger?.error(
+                      "❌ [Telegram] Failed to notify unauthorized user",
+                      {
+                        error: err instanceof Error ? err.message : String(err),
+                      },
+                    );
+                  }
+                }
+                return c.text("Unauthorized", 200);
+              }
 
               // Handle callback queries (button presses)
               if (payload?.callback_query) {
                 const callbackQuery = payload.callback_query;
                 const callbackData = callbackQuery.data;
-                const chatId =
-                  callbackQuery.message?.chat?.id?.toString() || "";
+                const chatIdStr = chatId?.toString() || "";
                 const messageId = callbackQuery.message?.message_id?.toString();
                 const callbackQueryId = callbackQuery.id;
 
                 logger?.info("🎯 [Telegram Trigger] Received callback query:", {
                   callbackData,
-                  chatId,
+                  chatId: chatIdStr,
                   messageId,
                   callbackQueryId,
                 });
@@ -269,7 +300,7 @@ export const mastra = new Mastra({
                 if (callbackData?.startsWith("grade:")) {
                   const [_, gradeStr, cardId] = callbackData.split(":");
                   const grade = parseInt(gradeStr);
-                  const owner_id = chatId;
+                  const owner_id = chatIdStr;
 
                   try {
                     // Get conversation state to get session data
@@ -351,9 +382,9 @@ export const mastra = new Mastra({
                         await run.start({
                           inputData: {
                             message: "__next_card__", // Special indicator for next card
-                            threadId: `telegram_${chatId}_${Date.now()}`,
+                            threadId: `telegram_${chatIdStr}_${Date.now()}`,
                             owner_id,
-                            chatId,
+                            chatId: chatIdStr,
                             messageId: undefined,
                           },
                         });
@@ -368,9 +399,9 @@ export const mastra = new Mastra({
                         await run.start({
                           inputData: {
                             message: "__session_complete__", // Special indicator for completion
-                            threadId: `telegram_${chatId}_${Date.now()}`,
+                            threadId: `telegram_${chatIdStr}_${Date.now()}`,
                             owner_id,
-                            chatId,
+                            chatId: chatIdStr,
                             messageId: undefined,
                           },
                         });
@@ -385,13 +416,13 @@ export const mastra = new Mastra({
                             ? error.message
                             : String(error),
                         callbackData,
-                        chatId,
+                        chatId: chatIdStr,
                       },
                     );
                   }
                 } else if (callbackData?.startsWith("list:")) {
                   const [_, action, cardId] = callbackData.split(":");
-                  const owner_id = chatId;
+                  const owner_id = chatIdStr;
 
                   try {
                     const result = await handleListCallback(
@@ -468,7 +499,7 @@ export const mastra = new Mastra({
                             ? error.message
                             : String(error),
                         callbackData,
-                        chatId,
+                        chatId: chatIdStr,
                       },
                     );
                   }
@@ -476,7 +507,7 @@ export const mastra = new Mastra({
                   return c.text("OK", 200);
                 } else if (callbackData?.startsWith("settings:")) {
                   const [_, action] = callbackData.split(":");
-                  const owner_id = chatId;
+                  const owner_id = chatIdStr;
 
                   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
                   if (TELEGRAM_BOT_TOKEN && messageId) {
@@ -604,10 +635,10 @@ export const mastra = new Mastra({
 
               // Extract message details for workflow
               let message = payload?.message?.text || "";
-              const chatId = payload?.message?.chat?.id?.toString() || "";
+              const chatIdStr = chatId?.toString() || "";
               const messageId = payload?.message?.message_id?.toString();
-              const threadId = `telegram_${chatId}_${messageId}`;
-              const owner_id = chatId; // Use chat ID as owner_id
+              const threadId = `telegram_${chatIdStr}_${messageId}`;
+              const owner_id = chatIdStr; // Use chat ID as owner_id
 
               // If no text but a document is present, try to download its content
               if (!message.trim() && payload?.message?.document?.file_id) {
@@ -661,7 +692,7 @@ export const mastra = new Mastra({
                   {
                     threadId,
                     owner_id,
-                    chatId,
+                    chatId: chatIdStr,
                     messageId,
                   },
                 );
@@ -674,7 +705,7 @@ export const mastra = new Mastra({
                     message,
                     threadId,
                     owner_id,
-                    chatId,
+                    chatId: chatIdStr,
                     messageId,
                   },
                 });
@@ -691,10 +722,10 @@ export const mastra = new Mastra({
                   "❌ [Telegram Trigger] Error starting workflow:",
                   {
                     error:
-                      error instanceof Error ? error.message : String(error),
+                    error instanceof Error ? error.message : String(error),
                     threadId,
                     owner_id,
-                    chatId,
+                    chatId: chatIdStr,
                   },
                 );
               }
