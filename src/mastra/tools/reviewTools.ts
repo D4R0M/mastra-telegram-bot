@@ -11,6 +11,7 @@ import {
 } from "../../db/reviews.js";
 import { getCardById } from "../../db/cards.js";
 import { calculateSM2 } from "../../db/sm2.js";
+import { withTransaction } from "../../db/client.js";
 import type {
   CreateReviewLogData,
   UpdateReviewStateData,
@@ -382,7 +383,7 @@ export const submitReviewTool = createTool({
         newQueue = "learning";
       }
 
-      // Update review state
+      // Update review state and log in a single transaction
       const updateData: UpdateReviewStateData = {
         interval_days: sm2Result.interval_days,
         repetitions: sm2Result.repetitions,
@@ -394,9 +395,6 @@ export const submitReviewTool = createTool({
         queue: newQueue,
       };
 
-      await updateReviewState(context.card_id, updateData);
-
-      // Log the review
       const reviewLogData: CreateReviewLogData = {
         card_id: context.card_id,
         grade: context.grade,
@@ -413,7 +411,10 @@ export const submitReviewTool = createTool({
         direction: "front_to_back",
       };
 
-      await createReviewLog(reviewLogData);
+      await withTransaction(async (client) => {
+        await updateReviewState(context.card_id, updateData, client);
+        await createReviewLog(reviewLogData, client);
+      });
 
       // Prepare response messages based on grade
       const gradeMessages = {
