@@ -1,6 +1,7 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
 import { buildToolExecCtx } from "../context.js";
 import { getStreakStatsTool } from "../tools/statisticsTools.js";
+import { fmtStreakHTML } from "../ui/format.js";
 
 export default async function handleStreakCommand(
   params: string[],
@@ -26,35 +27,21 @@ export default async function handleStreakCommand(
     });
 
     if (result.success && result.stats) {
-      const stats = result.stats;
-      const streakText = [
-        "🔥 <b>Your Study Streak</b>\n",
-        `Current Streak: ${stats.current_streak} days`,
-        `Longest Streak: ${stats.longest_streak} days`,
-        `Total Study Days: ${stats.total_study_days}`,
-        `Reviews Today: ${stats.reviews_today}`,
-        `Average Daily Reviews: ${stats.average_daily_reviews.toFixed(1)}`,
-      ];
+      const message = fmtStreakHTML(result.stats);
 
-      if (stats.last_review_date) {
-        streakText.push(`Last Review: ${stats.last_review_date}`);
-      }
-
-      if (stats.current_streak > 0) {
-        if (stats.current_streak >= 30) {
-          streakText.push(
-            "\n🏆 Amazing! You've maintained your streak for over a month!",
-          );
-        } else if (stats.current_streak >= 7) {
-          streakText.push("\n⭐ Great job! You're on a weekly streak!");
-        } else if (stats.current_streak >= 3) {
-          streakText.push("\n👍 Good work! Keep it up!");
-        }
-      }
+      const inline_keyboard = {
+        inline_keyboard: [
+          [
+            { text: "▶️ Practice now", callback_data: "practice_now" },
+            { text: "📊 Stats", callback_data: "/stats" },
+          ],
+        ],
+      };
 
       return {
-        response: streakText.join("\n"),
+        response: message,
         parse_mode: "HTML",
+        inline_keyboard,
       };
     } else {
       return {

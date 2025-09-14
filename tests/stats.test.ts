@@ -60,10 +60,11 @@ import { getComprehensiveStatsTool } from '../src/mastra/tools/statisticsTools.t
 describe('stats command', () => {
   it('renders numbers without undefined', async () => {
     const res = await handleStatsCommand([], '', 'user');
-    expect(res.response).toContain('Total Cards: 2');
-    expect(res.response).toContain('Cards Due Today: 1');
-    expect(res.response).toContain('Retention Rate: 50%');
+    expect(res.response).toContain('📊 Your Learning Stats');
+    expect(res.response).toContain('🗂️ <b>Total cards:</b> 2');
+    expect(res.response).toContain('Retention (30d):');
     expect(res.response).not.toContain('undefined');
+    expect(res.inline_keyboard).toBeTruthy();
   });
 
   it('handles missing stats with safe fallbacks', async () => {
@@ -76,8 +77,8 @@ describe('stats command', () => {
       },
     });
     const res = await handleStatsCommand([], '', 'user');
-    expect(res.response).toContain('Total Cards: 0');
-    expect(res.response).toContain('Average Ease: N/A');
-    expect(res.response).toContain('Retention Rate: N/A');
+    expect(res.response).toContain('🗂️ <b>Total cards:</b> 0');
+    expect(res.response).toContain('Ease avg: N/A');
+    expect(res.response).toContain('Retention (30d): N/A');
   });
 });
