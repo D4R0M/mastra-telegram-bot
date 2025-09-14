@@ -64,6 +64,7 @@ describe('stats command', () => {
     expect(res.response).toContain('🗂️ <b>Total cards:</b> 2');
     expect(res.response).toContain('Retention (30d):');
     expect(res.response).not.toContain('undefined');
+    expect(res.response).not.toContain('N/A');
     expect(res.inline_keyboard).toBeTruthy();
   });
 
@@ -78,7 +79,7 @@ describe('stats command', () => {
     });
     const res = await handleStatsCommand([], '', 'user');
     expect(res.response).toContain('🗂️ <b>Total cards:</b> 0');
-    expect(res.response).toContain('<b>Ease avg:</b> N/A');
-    expect(res.response).toContain('<b>Retention (30d):</b> N/A');
+    expect(res.response).toContain('<b>Ease avg:</b> 0.00');
+    expect(res.response).toContain('<b>Retention (30d):</b> 0%');
   });
 });

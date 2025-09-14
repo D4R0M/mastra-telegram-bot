@@ -34,17 +34,16 @@ export function calculateSM2(currentData: SM2Data, grade: number): SM2Result {
   }
 
   let { repetitions, interval_days, ease_factor, lapses } = currentData;
-  
-  // SM-2 Algorithm Implementation (verbatim from specification)
+
+  // SM-2 algorithm as specified by Piotr Wozniak
+  // First determine the next interval based on current ease factor
   if (grade < 3) {
-    // Lapse: reset repetitions and set short interval
+    // Failure: reset repetitions and use short interval
     repetitions = 0;
     interval_days = 1;
     lapses += 1;
   } else {
-    // Successful recall: update ease factor and calculate new interval
-    ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
-    
+    // Successful recall
     if (repetitions === 0) {
       interval_days = 1;
     } else if (repetitions === 1) {
@@ -52,9 +51,14 @@ export function calculateSM2(currentData: SM2Data, grade: number): SM2Result {
     } else {
       interval_days = Math.round(interval_days * ease_factor);
     }
-    
+
     repetitions += 1;
   }
+
+  // Then update ease factor (always, even after lapses)
+  ease_factor =
+    ease_factor + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02));
+  if (ease_factor < 1.3) ease_factor = 1.3;
   
   // Calculate due date
   const today = new Date();

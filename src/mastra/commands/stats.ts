@@ -29,26 +29,25 @@ export default async function handleStatsCommand(
 
     if (result.success && result.stats) {
       const raw = result.stats;
+      const dc = raw.due_cards || {};
+      const ret = raw.retention || {};
+      const streak = raw.streaks || {};
       const stats: Stats = {
-        totalCards: raw.due_cards?.total_cards ?? null,
-        dueToday: raw.due_cards?.cards_due_today ?? null,
-        newToday: raw.due_cards?.new_cards ?? null,
-        avgEase: raw.due_cards?.average_ease ?? null,
+        totalCards: dc.total_cards ?? 0,
+        dueToday: dc.cards_due_today ?? 0,
+        newToday: dc.new_cards ?? 0,
+        avgEase: dc.average_ease ?? 0,
         retentionRate:
-          raw.retention?.retention_rate != null
-            ? raw.retention.retention_rate / 100
-            : null,
+          ret.retention_rate != null ? ret.retention_rate / 100 : 0,
         retentionDelta:
-          raw.retention?.success_rate_last_30_days != null &&
-          raw.retention?.retention_rate != null
-            ? (raw.retention.success_rate_last_30_days -
-                raw.retention.retention_rate) /
-              100
-            : null,
-        currentStreakDays: raw.streaks?.current_streak ?? null,
-        longestStreakDays: raw.streaks?.longest_streak ?? null,
-        dueNowPct: null,
-        newTodayPct: null,
+          ret.success_rate_last_30_days != null &&
+          ret.retention_rate != null
+            ? (ret.success_rate_last_30_days - ret.retention_rate) / 100
+            : 0,
+        currentStreakDays: streak.current_streak ?? 0,
+        longestStreakDays: streak.longest_streak ?? 0,
+        dueNowPct: 0,
+        newTodayPct: 0,
       };
       return {
         response: fmtStatsHTML(stats),
