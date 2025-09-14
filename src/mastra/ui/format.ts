@@ -65,4 +65,110 @@ export function fmtStatsHTML(s: Stats) {
   ].join('\n');
 }
 
+export type Streak = {
+  current: number | null;
+  longest: number | null;
+  totalDays: number | null;
+  reviewsToday: number | null;
+  avgDailyReviews: number | null;
+  lastReviewDate: string | null;
+};
+
+export function fmtStreakHTML(s: Streak) {
+  const current = num(s.current);
+  const longest = num(s.longest);
+  const total = num(s.totalDays);
+  const reviewsToday = num(s.reviewsToday);
+  const avgDaily =
+    s.avgDailyReviews == null ? 'N/A' : s.avgDailyReviews.toFixed(1);
+  const lastReview = s.lastReviewDate ?? 'N/A';
+
+  let note = '';
+  if (current >= 30) {
+    note = "\n🏆 Amazing! You've maintained your streak for over a month!";
+  } else if (current >= 7) {
+    note = "\n⭐ Great job! You're on a weekly streak!";
+  } else if (current >= 3) {
+    note = "\n👍 Good work! Keep it up!";
+  }
+
+  return [
+    '<b>🔥 Your Study Streak</b>',
+    `Current streak: ${current} days`,
+    `Longest streak: ${longest} days`,
+    `Total study days: ${total}`,
+    `Reviews today: ${reviewsToday}`,
+    `Avg daily reviews: ${avgDaily}`,
+    `Last review: ${lastReview}`,
+    note,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export type Settings = {
+  timezone: string;
+  dnd_start: string;
+  dnd_end: string;
+  daily_new_limit: number;
+  daily_review_limit: number;
+  session_size: number;
+  reminders_enabled: boolean;
+  reminder_times: string[];
+  algorithm: string;
+  locale: string;
+};
+
+export function fmtSettingsHTML(s: Settings) {
+  return [
+    '<b>⚙️ Your Settings</b>',
+    `📍 <b>Timezone:</b> ${s.timezone}`,
+    `🔕 <b>Do Not Disturb:</b> ${s.dnd_start} - ${s.dnd_end}`,
+    `📚 <b>Daily New Cards:</b> ${s.daily_new_limit}`,
+    `🔄 <b>Daily Reviews:</b> ${s.daily_review_limit}`,
+    `📖 <b>Session Size:</b> ${s.session_size} cards`,
+    `🔔 <b>Reminders:</b> ${s.reminders_enabled ? 'Enabled' : 'Disabled'}`,
+    `⏰ <b>Reminder Times:</b> ${s.reminder_times.join(', ')}`,
+    `🧮 <b>Algorithm:</b> ${s.algorithm.toUpperCase()}`,
+    `🌐 <b>Language:</b> ${s.locale}`,
+  ].join('\n');
+}
+
+export function fmtHelpHTML() {
+  return [
+    '<b>📚 Vocabulary Learning Bot Commands</b>',
+    '',
+    '<b>Core Commands:</b>',
+    '/add - Add a new vocabulary card',
+    '/practice - Start a review session',
+    '/list - Show all your cards',
+    '/due - Check cards due for review',
+    '/stats - View your learning statistics',
+    '/streak - Check your study streak',
+    '',
+    '<b>Card Management:</b>',
+    '/edit [id] - Edit a card',
+    '/delete [id] - Delete a card',
+    '/export csv - Export cards to CSV',
+    '/import - Import cards from CSV',
+    '',
+    '<b>Settings:</b>',
+    '/settings - View your settings',
+    '/reset - Reset settings to defaults',
+    '',
+    '<b>Quick Add Formats:</b>',
+    '/add word | translation',
+    '/add word :: translation',
+    '/add word | translation | tags | example',
+    '',
+    '<i>During reviews, grade yourself 0-5:</i>',
+    '0 = Complete failure',
+    '1 = Incorrect, saw answer',
+    '2 = Incorrect, but easy',
+    '3 = Correct, difficult',
+    '4 = Correct, hesitated',
+    '5 = Perfect recall',
+  ].join('\n');
+}
+
 export { clamp01, num };

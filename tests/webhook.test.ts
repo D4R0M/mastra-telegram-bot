@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { processTelegramUpdate } from "../src/mastra/telegram";
 
+vi.mock("../src/mastra/conversationStateStorage.ts", () => ({
+  getConversationState: vi.fn(async () => ({ state: undefined, expired: false })),
+  saveConversationState: vi.fn(async () => {}),
+}));
+
 describe("processTelegramUpdate", () => {
   beforeEach(() => {
     vi.restoreAllMocks();

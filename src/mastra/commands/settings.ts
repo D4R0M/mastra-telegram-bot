@@ -1,6 +1,7 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
 import { buildToolExecCtx } from "../context.js";
 import { getUserSettingsTool } from "../tools/settingsTools.js";
+import { fmtSettingsHTML, type Settings as SettingsUI } from "../ui/format.js";
 
 export default async function handleSettingsCommand(
   params: string[],
@@ -25,20 +26,7 @@ export default async function handleSettingsCommand(
     });
 
     if (result.success && result.settings) {
-      const settings = result.settings;
-      const settingsText = [
-        "⚙️ <b>Your Settings</b>\n",
-        `📍 Timezone: ${settings.timezone}`,
-        `🔕 Do Not Disturb: ${settings.dnd_start} - ${settings.dnd_end}`,
-        `📚 Daily New Cards: ${settings.daily_new_limit}`,
-        `🔄 Daily Reviews: ${settings.daily_review_limit}`,
-        `📖 Session Size: ${settings.session_size} cards`,
-        `🔔 Reminders: ${settings.reminders_enabled ? "Enabled" : "Disabled"}`,
-        `⏰ Reminder Times: ${settings.reminder_times.join(", ")}`,
-        `🧮 Algorithm: ${settings.algorithm.toUpperCase()}`,
-        `🌐 Language: ${settings.locale}`,
-      ];
-
+      const settings: SettingsUI = result.settings;
       const inline_keyboard = {
         inline_keyboard: [
           [
@@ -65,7 +53,7 @@ export default async function handleSettingsCommand(
       };
 
       return {
-        response: settingsText.join("\n"),
+        response: fmtSettingsHTML(settings),
         parse_mode: "HTML",
         inline_keyboard,
         conversationState: {
