@@ -1,6 +1,6 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
 import { buildToolExecCtx } from "../context.js";
-import { exportCSVTool } from "../tools/importExportTools.js";
+import { exportCSVTool, parseCSV } from "../tools/importExportTools.js";
 
 export default async function handleExportCommand(
   params: string[],
@@ -12,12 +12,22 @@ export default async function handleExportCommand(
   const logger = mastra?.getLogger();
 
   try {
-    const format = params[0]?.toLowerCase() || "csv";
+    let idx = 0;
+    if (params[0]?.toLowerCase() === "csv") {
+      idx = 1;
+    }
+    const action = params[idx]?.toLowerCase();
+    let dueOnly = false;
+    let tags: string[] | undefined;
 
-    if (format !== "csv") {
+    if (action === "due") {
+      dueOnly = true;
+    } else if (action === "tag") {
+      const tag = params.slice(idx + 1).join(" ");
+      if (tag) tags = [tag];
+    } else if (action && action !== "all") {
       return {
-        response:
-          "❓ Currently only CSV export is supported:\n<code>/export csv</code>",
+        response: "❓ Unsupported export option.",
         parse_mode: "HTML",
       };
     }
@@ -30,6 +40,8 @@ export default async function handleExportCommand(
         owner_id: userId,
         include_inactive: false,
         limit: 1000,
+        tags_filter: tags,
+        due_only: dueOnly,
       },
       runtimeContext,
       tracingContext,
@@ -37,14 +49,33 @@ export default async function handleExportCommand(
     });
 
     if (result.success && result.csv_data) {
-      // In a real implementation, you would send this as a file
-      // For now, we'll return a truncated preview
-      const lines = result.csv_data.split("\n");
-      const preview = lines.slice(0, 5).join("\n");
+      const rows = parseCSV(result.csv_data);
+      const dataRows = rows.slice(1);
+      const previewRows = dataRows.slice(0, 3);
+      const previewText = previewRows
+        .map((r, i) => `${i + 1}️⃣ ${r[0]} → ${r[1]}`)
+        .join("\n");
 
       return {
-        response: `📄 <b>CSV Export Ready</b>\n\nTotal cards: ${result.card_count}\n\n<b>Preview:</b>\n<code>${preview}</code>\n\n<i>Full CSV data has ${lines.length} lines.</i>`,
+        response: `📂 CSV Export Ready\nTotal cards: ${result.card_count}\nPreview (first ${previewRows.length} of ${result.card_count}):\n\n${previewText}\n\n💡 Use the buttons below to get your full CSV.`,
         parse_mode: "HTML",
+        inline_keyboard: {
+          inline_keyboard: [
+            [
+              { text: "⬇ Download CSV", callback_data: "export:download" },
+              { text: "📋 Copy Preview", callback_data: "export:copy" },
+            ],
+            [{ text: "🔄 Export Options", callback_data: "export:options" }],
+          ],
+        },
+        conversationState: {
+          mode: "export_csv",
+          data: {
+            csv: result.csv_data,
+            preview: previewText,
+            filename: result.filename_suggestion || "cards_export.csv",
+          },
+        },
       };
     } else {
       return {
