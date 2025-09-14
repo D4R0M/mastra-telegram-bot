@@ -69,6 +69,7 @@ describe("review session flow", () => {
       answerRes.conversationState,
     );
     expect(gradeRes.conversationState?.data.current_index).toBe(2);
+    expect(gradeRes.response).toContain("Recorded: Grade 4");
     expect(gradeRes.response).toContain("Card 2/2");
   });
 });
