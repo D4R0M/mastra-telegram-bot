@@ -49,7 +49,7 @@ const fetchReminderUsersStep = createStep({
 });
 
 // Step 2: For each user, check timing and send reminder if appropriate
-const processRemindersStep = createStep({
+export const processRemindersStep = createStep({
   id: "process-reminders",
   description: "Check reminder timing and send reminders via Telegram",
   inputSchema: z.object({
@@ -89,10 +89,12 @@ const processRemindersStep = createStep({
         });
 
         const due = stats.success ? stats.stats.due_cards : 0;
+        if (due <= 0) {
+          continue;
+        }
+
         const message =
-          due > 0
-            ? `You have ${due} cards due—/practice to start reviewing`
-            : `No cards due right now—/practice to start reviewing`;
+          `🔔 Time to review! You have ${due} cards due—/practice to start reviewing`;
 
         const sendResult = await sendTelegramResponseStep.execute({
           inputData: {
