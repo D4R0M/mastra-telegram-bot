@@ -216,7 +216,7 @@ export const startReviewTool = createTool({
       })
       .optional(),
     start_time: z
-      .number()
+      .coerce.number()
       .describe("Timestamp when review started (for measuring latency)"),
     message: z.string(),
   }),
@@ -296,7 +296,7 @@ export const submitReviewTool = createTool({
         "Grade: 0=total blackout, 1=incorrect but remembered, 2=incorrect but easy, 3=correct but difficult, 4=correct with hesitation, 5=perfect recall",
       ),
     start_time: z
-      .number()
+      .coerce.number()
       .describe("Timestamp when review started (for measuring latency)"),
     session_id: z
       .string()
@@ -368,8 +368,16 @@ export const submitReviewTool = createTool({
       }
 
       // Calculate timing
+      // Ensure start_time is a valid number to avoid invalid timestamp errors
+      const startTimeMs =
+        typeof context.start_time === "string"
+          ? Number(context.start_time)
+          : context.start_time;
       const tsAnswered = new Date();
-      const latencyMs = tsAnswered.getTime() - context.start_time;
+      const safeStartTime = Number.isFinite(startTimeMs)
+        ? startTimeMs
+        : tsAnswered.getTime();
+      const latencyMs = tsAnswered.getTime() - safeStartTime;
 
       // Apply SM-2 algorithm
       logger?.info("📝 [SubmitReview] Applying SM-2 algorithm:", {
@@ -426,7 +434,7 @@ export const submitReviewTool = createTool({
         direction: "front_to_back",
       };
 
-      const tsShown = new Date(context.start_time);
+      const tsShown = new Date(safeStartTime);
       const scheduledAt = new Date(`${currentReviewState.due_date}T00:00:00Z`);
       const reviewEvent: ReviewEvent = {
         card_id: context.card_id,
