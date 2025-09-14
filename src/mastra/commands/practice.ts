@@ -77,6 +77,7 @@ export default async function handlePracticeCommand(
             total_cards: totalCards,
             all_cards: dueResult.cards,
             start_time: startResult.start_time,
+            correct_streak: 0,
           },
         },
         parse_mode: "HTML",
