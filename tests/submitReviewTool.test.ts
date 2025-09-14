@@ -25,12 +25,11 @@ vi.mock('../src/db/cards.ts', () => ({
   })),
 }));
 
-vi.mock('../src/db/sm2.ts', () => ({
-  calculateSM2: vi.fn(() => ({
-    interval_days: 1,
+vi.mock('../src/lib/sm2.ts', () => ({
+  applySM2: vi.fn(() => ({
+    intervalDays: 1,
     repetitions: 1,
-    ease_factor: 2.6,
-    due_date: '2024-01-02',
+    easeFactor: 2.6,
     lapses: 0,
   })),
 }));
@@ -62,5 +61,7 @@ describe('submitReviewTool', () => {
     const event = vi.mocked(logReview).mock.calls[0][0];
     expect(event.ts_shown).toBeInstanceOf(Date);
     expect(isNaN(event.ts_shown.getTime())).toBe(false);
+    expect(event.scheduled_at).toBeInstanceOf(Date);
+    expect(isNaN(event.scheduled_at.getTime())).toBe(false);
   });
 });
