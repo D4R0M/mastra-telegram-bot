@@ -4,10 +4,11 @@ vi.mock('../src/db/client.ts', () => ({
   getPool: () => ({ query: vi.fn() }),
 }));
 
-const { mockAdd, mockAddAlias, mockHelp } = vi.hoisted(() => ({
+const { mockAdd, mockAddAlias, mockHelp, mockStart } = vi.hoisted(() => ({
   mockAdd: vi.fn(async () => ({ response: 'add' })),
   mockAddAlias: vi.fn(async () => ({ response: 'add-alias' })),
   mockHelp: vi.fn(async () => ({ response: 'help' })),
+  mockStart: vi.fn(async () => ({ response: 'start' })),
 }));
 
 vi.mock('../src/mastra/commands/index.ts', () => ({
@@ -15,6 +16,7 @@ vi.mock('../src/mastra/commands/index.ts', () => ({
     '/add': mockAdd,
     '/a': mockAddAlias,
     '/help': mockHelp,
+    '/start': mockStart,
   }
 }));
 
@@ -24,6 +26,7 @@ beforeEach(() => {
   mockAdd.mockClear();
   mockAddAlias.mockClear();
   mockHelp.mockClear();
+  mockStart.mockClear();
 });
 
 describe('parseCommand', () => {
@@ -75,5 +78,11 @@ describe('processCommand', () => {
   it('returns unknown command message for unrecognized commands', async () => {
     const result = await processCommand('/unknown', 'user', 'chat');
     expect(result.response).toContain('Unknown command');
+  });
+
+  it('processes slash commands even with active conversation state', async () => {
+    const result = await processCommand('/start', 'user', 'chat', { mode: 'add_card_guided', step: 1 });
+    expect(result.response).toBe('start');
+    expect(mockStart).toHaveBeenCalled();
   });
 });
