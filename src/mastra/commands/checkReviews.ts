@@ -1,18 +1,26 @@
 import type { CommandResponse, ConversationState } from "../commandParser.js";
-import {
-  getReviewStats,
-  formatStatsMessage,
-  exportReviewsCsv,
-  type ReviewRange,
-} from "../../stats/reviews.js";
-import { AUTHORIZED_TELEGRAM_USER_IDS } from "../authorization.js";
 
-const OWNER_ID =
-  process.env.BOT_OWNER_ID || Array.from(AUTHORIZED_TELEGRAM_USER_IDS)[0];
+/**
+ * Fetch basic pull request review statistics for the configured GitHub user.
+ * Only a single user is supported so we read the username (and optional token)
+ * from environment variables and query GitHub's search API for the total number
+ * of PRs they've reviewed.
+ */
+async function fetchGithubReviewStats(): Promise<string> {
+  const username = process.env.GITHUB_USERNAME;
+  const token = process.env.GITHUB_TOKEN;
+  if (!username) throw new Error("GITHUB_USERNAME not set");
 
-function parseRange(r?: string): ReviewRange {
-  if (r === "today" || r === "7d" || r === "30d" || r === "all") return r;
-  return "7d";
+  const headers: Record<string, string> = { "User-Agent": "mastra-bot" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const q = `type:pr+reviewed-by:${username}`;
+  const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error(`GitHub API responded ${res.status}`);
+  const data = await res.json();
+  const total = data?.total_count ?? 0;
+  return `You have reviewed ${total} pull request${total === 1 ? "" : "s"} on GitHub.`;
 }
 
 export default async function handleCheckReviewsCommand(
@@ -23,39 +31,11 @@ export default async function handleCheckReviewsCommand(
   mastra?: any,
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
-  if (String(userId) !== String(OWNER_ID)) {
-    return { response: "This command is restricted.", parse_mode: "Markdown" };
-  }
-
-  const range = parseRange(params[0]);
   try {
-    const stats = await getReviewStats(range);
-    const { text, keyboard } = formatStatsMessage({ ...stats, range });
-    return { response: text, parse_mode: "Markdown", inline_keyboard: keyboard };
+    const message = await fetchGithubReviewStats();
+    return { response: message, parse_mode: "Markdown" };
   } catch (err) {
     logger?.error("check_reviews_error", err);
     return { response: "Couldn't load review stats", parse_mode: "Markdown" };
-  }
-}
-
-export async function handleCheckReviewsExport(
-  range: ReviewRange,
-  userId: string,
-  mastra?: any,
-): Promise<CommandResponse> {
-  const logger = mastra?.getLogger();
-  if (String(userId) !== String(OWNER_ID)) {
-    return { response: "This command is restricted.", parse_mode: "Markdown" };
-  }
-  try {
-    const { buffer, filename } = await exportReviewsCsv(range);
-    return {
-      response: "Here is your export.",
-      parse_mode: "Markdown",
-      document: { filename, content: buffer.toString("utf8") },
-    };
-  } catch (err) {
-    logger?.error("check_reviews_export_error", err);
-    return { response: "Couldn't export review stats", parse_mode: "Markdown" };
   }
 }
