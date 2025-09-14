@@ -56,9 +56,13 @@ export function parseCommand(message: string): ParsedCommand | null {
 
   // Split command and parameters
   const parts = trimmed.split(/\s+/);
-  const command = parts[0].toLowerCase();
+  let command = parts[0].toLowerCase();
+  // Strip bot username if present (/start@botname)
+  if (command.includes("@")) {
+    command = command.split("@")[0];
+  }
   const params = parts.slice(1);
-  const rawParams = trimmed.substring(command.length).trim();
+  const rawParams = trimmed.substring(parts[0].length).trim();
 
   return {
     command,
@@ -872,6 +876,92 @@ export async function handleListCallback(
     response: "❌ Unknown action",
     parse_mode: "HTML",
   };
+}
+
+export async function handleSettingsCallback(
+  action: string,
+  userId: string,
+  mastra?: any,
+): Promise<CommandResponse> {
+  const logger = mastra?.getLogger();
+
+  try {
+    if (action === "toggle_reminders") {
+      const { getReminderSettingsTool } = await import("./tools/reminderTools.js");
+      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+        requestId: userId,
+      });
+      const current = await getReminderSettingsTool.execute({
+        context: { user_id: userId },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+      if (current.success && current.settings) {
+        const { updateReminderSettingsTool } = await import(
+          "./tools/reminderTools.js"
+        );
+        const toggled = !current.settings.enabled;
+        await updateReminderSettingsTool.execute({
+          context: { user_id: userId, enabled: toggled },
+          runtimeContext,
+          tracingContext,
+          mastra,
+        });
+        const settingsHandler = commandRegistry["/settings"];
+        if (settingsHandler) {
+          return settingsHandler([], "", userId, undefined, mastra);
+        }
+        return {
+          response: toggled
+            ? "✅ Reminders enabled"
+            : "🔕 Reminders disabled",
+          parse_mode: "HTML",
+        };
+      }
+      return {
+        response: `❌ ${current.message}`,
+        parse_mode: "HTML",
+      };
+    }
+
+    if (action === "change_timezone") {
+      return {
+        response:
+          "🌍 Please enter your timezone (e.g., Europe/Stockholm)",
+        conversationState: {
+          mode: "settings_menu",
+          step: 2,
+          data: { action: "timezone" },
+        },
+        parse_mode: "HTML",
+      };
+    }
+
+    if (action === "session_size") {
+      return {
+        response: "📚 Enter new session size (number of cards per session)",
+        conversationState: {
+          mode: "settings_menu",
+          step: 2,
+          data: { action: "session_size" },
+        },
+        parse_mode: "HTML",
+      };
+    }
+
+    logger?.warn("Unknown settings callback action", { action });
+    return { response: "❌ Unknown action", parse_mode: "HTML" };
+  } catch (error) {
+    logger?.error("settings_callback_error", {
+      action,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      response: "❌ Error processing settings action",
+      parse_mode: "HTML",
+    };
+  }
 }
 
 // ===============================

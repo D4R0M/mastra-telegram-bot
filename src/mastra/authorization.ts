@@ -1,4 +1,8 @@
-export const AUTHORIZED_TELEGRAM_USER_IDS = new Set<string>(["6776842238"]);
+const envIds =
+  process.env.ALLOWED_USER_IDS?.split(",").map((id) => id.trim()).filter(Boolean) ||
+  ["6776842238"];
+
+export const AUTHORIZED_TELEGRAM_USER_IDS = new Set<string>(envIds);
 
 export function isAuthorizedTelegramUser(
   userId: string | number | undefined,

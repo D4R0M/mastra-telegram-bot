@@ -115,6 +115,7 @@ The bot will use **polling mode** in development (no webhook required).
 
 - `PORT`: Server port (Railway sets this automatically)
 - `INNGEST_CONFIG`: Custom Inngest configuration path
+- `ALLOWED_USER_IDS`: Comma-separated Telegram user IDs allowed to use the bot
 
 ### API Endpoints
 
