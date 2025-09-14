@@ -11,7 +11,7 @@ import {
   logReview,
 } from "../../db/reviews.js";
 import { getCardById } from "../../db/cards.js";
-import { calculateSM2 } from "../../db/sm2.js";
+import { applySM2 } from "../../lib/sm2.js";
 import { withTransaction } from "../../db/client.js";
 import type {
   CreateReviewLogData,
@@ -387,34 +387,84 @@ export const submitReviewTool = createTool({
         current_repetitions: currentReviewState.repetitions,
       });
 
-      const sm2Result = calculateSM2(
-        {
-          repetitions: currentReviewState.repetitions,
-          interval_days: currentReviewState.interval_days,
-          ease_factor: currentReviewState.ease_factor,
-          due_date: currentReviewState.due_date,
-          lapses: currentReviewState.lapses,
-        },
-        context.grade,
+      const sm2Result = applySM2(context.grade, {
+        easeFactor: currentReviewState.ease_factor,
+        intervalDays: currentReviewState.interval_days,
+        repetitions: currentReviewState.repetitions,
+        lapses: currentReviewState.lapses,
+      });
+
+      // Defensive defaults
+      let {
+        intervalDays: nextIntervalDays,
+        easeFactor: nextEase,
+        repetitions: nextReps,
+        lapses: nextLapses,
+      } = sm2Result;
+
+      const isFiniteNumber = (n: number) => Number.isFinite(n);
+      if (!isFiniteNumber(nextIntervalDays) || nextIntervalDays <= 0) {
+        logger?.error("⚠️ [SubmitReview] Non-finite interval detected", {
+          interval: nextIntervalDays,
+        });
+        nextIntervalDays = 1;
+      }
+      if (!isFiniteNumber(nextEase)) {
+        logger?.error("⚠️ [SubmitReview] Non-finite ease detected", {
+          ease: nextEase,
+        });
+        nextEase = 1.3;
+      }
+      if (!isFiniteNumber(nextReps) || nextReps < 0) {
+        logger?.error("⚠️ [SubmitReview] Non-finite repetitions detected", {
+          repetitions: nextReps,
+        });
+        nextReps = 0;
+      }
+      if (!isFiniteNumber(nextLapses) || nextLapses < 0) {
+        logger?.error("⚠️ [SubmitReview] Non-finite lapses detected", {
+          lapses: nextLapses,
+        });
+        nextLapses = 0;
+      }
+
+      const tsShown = new Date(safeStartTime);
+      const scheduledAt = new Date(
+        tsAnswered.getTime() + nextIntervalDays * 86_400_000,
       );
+      if (isNaN(scheduledAt.getTime())) {
+        throw new Error("Computed scheduledAt is invalid");
+      }
+      const dueDate = scheduledAt.toISOString().split("T")[0];
+
+      const wasOverdue =
+        tsShown > new Date(`${currentReviewState.due_date}T00:00:00Z`);
+      const isNew = currentReviewState.repetitions === 0;
+
+      logger?.info("📝 [SubmitReview] Computed scheduling", {
+        intervalDays: nextIntervalDays,
+        scheduledAt: scheduledAt.toISOString(),
+        isNew,
+        wasOverdue,
+      });
 
       // Determine new queue status
       let newQueue: "new" | "learning" | "review" = "review";
-      if (sm2Result.repetitions === 0) {
+      if (nextReps === 0) {
         newQueue = "learning";
-      } else if (sm2Result.repetitions === 1) {
+      } else if (nextReps === 1) {
         newQueue = "learning";
       }
 
       // Update review state and log in a single transaction
       const updateData: UpdateReviewStateData = {
-        interval_days: sm2Result.interval_days,
-        repetitions: sm2Result.repetitions,
-        ease_factor: sm2Result.ease_factor,
-        due_date: sm2Result.due_date,
+        interval_days: nextIntervalDays,
+        repetitions: nextReps,
+        ease_factor: nextEase,
+        due_date: dueDate,
         last_reviewed_at: new Date(),
         last_grade: context.grade,
-        lapses: sm2Result.lapses,
+        lapses: nextLapses,
         queue: newQueue,
       };
 
@@ -422,20 +472,18 @@ export const submitReviewTool = createTool({
         card_id: context.card_id,
         grade: context.grade,
         prev_ease: currentReviewState.ease_factor,
-        new_ease: sm2Result.ease_factor,
+        new_ease: nextEase,
         prev_interval: currentReviewState.interval_days,
-        new_interval: sm2Result.interval_days,
+        new_interval: nextIntervalDays,
         prev_repetitions: currentReviewState.repetitions,
-        new_repetitions: sm2Result.repetitions,
+        new_repetitions: nextReps,
         prev_due: currentReviewState.due_date,
-        new_due: sm2Result.due_date,
+        new_due: dueDate,
         latency_ms: latencyMs,
         session_id: context.session_id,
         direction: "front_to_back",
       };
 
-      const tsShown = new Date(safeStartTime);
-      const scheduledAt = new Date(`${currentReviewState.due_date}T00:00:00Z`);
       const reviewEvent: ReviewEvent = {
         card_id: context.card_id,
         ts_shown: tsShown,
@@ -444,12 +492,12 @@ export const submitReviewTool = createTool({
         scheduled_at: scheduledAt,
         prev_review_at: currentReviewState.last_reviewed_at,
         prev_interval_days: currentReviewState.interval_days,
-        due_interval_days: sm2Result.interval_days,
-        was_overdue: tsShown > scheduledAt,
-        ease_factor: sm2Result.ease_factor,
-        repetition: sm2Result.repetitions,
-        lapses: sm2Result.lapses,
-        is_new: currentReviewState.repetitions === 0,
+        due_interval_days: nextIntervalDays,
+        was_overdue: wasOverdue,
+        ease_factor: nextEase,
+        repetition: nextReps,
+        lapses: nextLapses,
+        is_new: isNew,
         answer_latency_ms: latencyMs,
         session_id: context.session_id,
         position_in_session: context.position_in_session,
@@ -473,17 +521,17 @@ export const submitReviewTool = createTool({
         5: "Perfect recall! Excellent work!",
       };
 
-      const nextReviewMessage =
-        sm2Result.interval_days === 1
-          ? "You'll review this again tomorrow."
-          : `You'll review this again in ${sm2Result.interval_days} days (${sm2Result.due_date}).`;
+        const nextReviewMessage =
+          nextIntervalDays === 1
+            ? "You'll review this again tomorrow."
+            : `You'll review this again in ${nextIntervalDays} days (${dueDate}).`;
 
-      logger?.info("✅ [SubmitReview] Review completed successfully:", {
-        card_id: context.card_id,
-        grade: context.grade,
-        new_due_date: sm2Result.due_date,
-        new_interval: sm2Result.interval_days,
-      });
+        logger?.info("✅ [SubmitReview] Review completed successfully:", {
+          card_id: context.card_id,
+          grade: context.grade,
+          new_due_date: dueDate,
+          new_interval: nextIntervalDays,
+        });
 
       return {
         success: true,
@@ -498,14 +546,14 @@ export const submitReviewTool = createTool({
         },
         review_result: {
           grade: context.grade,
-          previous_ease: currentReviewState.ease_factor,
-          new_ease: sm2Result.ease_factor,
-          previous_interval: currentReviewState.interval_days,
-          new_interval: sm2Result.interval_days,
-          previous_repetitions: currentReviewState.repetitions,
-          new_repetitions: sm2Result.repetitions,
-          due_date: sm2Result.due_date,
-          latency_ms: latencyMs,
+            previous_ease: currentReviewState.ease_factor,
+            new_ease: nextEase,
+            previous_interval: currentReviewState.interval_days,
+            new_interval: nextIntervalDays,
+            previous_repetitions: currentReviewState.repetitions,
+            new_repetitions: nextReps,
+            due_date: dueDate,
+            latency_ms: latencyMs,
         },
         message: `${gradeMessages[context.grade as keyof typeof gradeMessages]} The answer was: "${card.back}". ${nextReviewMessage}`,
       };
