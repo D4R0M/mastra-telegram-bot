@@ -89,10 +89,16 @@ const processRemindersStep = createStep({
         });
 
         const due = stats.success ? stats.stats.due_cards : 0;
-        const message =
-          due > 0
-            ? `You have ${due} cards due—/practice to start reviewing`
-            : `No cards due right now—/practice to start reviewing`;
+
+        if (due <= 0) {
+          logger?.info(
+            "ℹ️ [ReminderWorkflow] No due cards for user, skipping reminder",
+            { user_id: user.user_id },
+          );
+          continue;
+        }
+
+        const message = `You have ${due} cards due—/practice to start reviewing`;
 
         const sendResult = await sendTelegramResponseStep.execute({
           inputData: {
