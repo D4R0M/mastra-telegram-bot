@@ -92,6 +92,32 @@ export async function processTelegramUpdate(
         const action = data.split(":")[1];
         result = await handleSettingsCallback(action, userIdStr, mastra);
         commandHandled = `callback_settings_${action}`;
+      } else if (data === "practice_now") {
+        result = await processCommand(
+          "/practice",
+          userIdStr,
+          chatId,
+          existingState,
+          mastra,
+          expired,
+        );
+        commandHandled = "callback_practice_now";
+      } else if (data === "add_card") {
+        result = await processCommand(
+          "/add",
+          userIdStr,
+          chatId,
+          existingState,
+          mastra,
+          expired,
+        );
+        commandHandled = "callback_add_card";
+      } else if (data === "open_stats_detail") {
+        result = {
+          response: "Coming soon: daily breakdown & tag analytics.",
+          parse_mode: "HTML",
+        };
+        commandHandled = "callback_open_stats_detail";
       } else {
         result = await processCommand(
           data,
