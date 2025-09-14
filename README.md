@@ -24,6 +24,7 @@ Built with the [Mastra framework](https://mastra.ai/en/docs) for workflow orches
 ### Setup
 
 1. **Clone and install dependencies:**
+
    ```bash
    git clone <repository>
    cd <project-directory>
@@ -31,11 +32,13 @@ Built with the [Mastra framework](https://mastra.ai/en/docs) for workflow orches
    ```
 
 2. **Environment setup:**
+
    ```bash
    cp .env.example .env
    ```
-   
+
    Edit `.env` with your values:
+
    ```bash
    NODE_ENV=development
    TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
@@ -59,6 +62,7 @@ The bot will use **polling mode** in development (no webhook required).
 ### Deploy Steps
 
 1. **Push to GitHub:**
+
    ```bash
    git add .
    git commit -m "Deploy to Railway"
@@ -72,6 +76,7 @@ The bot will use **polling mode** in development (no webhook required).
    - Choose **Web Service** (not Worker)
 
 3. **Set Environment Variables:**
+
    ```bash
    NODE_ENV=production
    TELEGRAM_BOT_TOKEN=your_bot_token
@@ -100,12 +105,14 @@ The bot will use **polling mode** in development (no webhook required).
 ### Environment Variables
 
 **Required in Production:**
+
 - `TELEGRAM_BOT_TOKEN`: Your bot token from @BotFather
 - `DATABASE_URL`: PostgreSQL connection string
 - `PUBLIC_URL`: Your Railway app URL (for webhook setup)
 - `NODE_ENV=production`
 
 **Optional:**
+
 - `PORT`: Server port (Railway sets this automatically)
 - `INNGEST_CONFIG`: Custom Inngest configuration path
 
@@ -115,19 +122,33 @@ The bot will use **polling mode** in development (no webhook required).
 - `POST /webhooks/telegram/action` - Telegram webhook endpoint
 - `POST /api/inngest` - Inngest workflow registration
 
+### Performance
+
+The Telegram webhook now ACKs updates immediately (<100 ms) and processes work asynchronously after the response.
+
+```bash
+npm run curl:webhook
+```
+
+Run the above to verify a fast 200 OK.
+
+For minimal latency in production, deploy the app and its PostgreSQL database in the same EU region on Railway and keep the service Always On (no sleeping).
+
 ### Commands
 
 **Bot Commands:**
+
 - `/add` - Add new vocabulary card (guided mode)
 - `/add word | translation` - Quick add card
 - `/list` - Show your vocabulary cards
-- `/practice` - Start spaced repetition session  
+- `/practice` - Start spaced repetition session
 - `/stats` - View learning statistics
 - `/settings` - Manage bot preferences
 - `/import` - Import cards from CSV
 - `/export` - Export cards to CSV
 
 **Development Scripts:**
+
 - `npm run dev` - Start development server (polling mode)
 - `npm run build` - Build for production
 - `npm start` - Start production server
