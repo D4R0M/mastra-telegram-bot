@@ -8,6 +8,7 @@ import {
   createReviewLog,
   getReviewState,
   getReviewStates,
+  logReview,
 } from "../../db/reviews.js";
 import { getCardById } from "../../db/cards.js";
 import { calculateSM2 } from "../../db/sm2.js";
@@ -15,7 +16,16 @@ import { withTransaction } from "../../db/client.js";
 import type {
   CreateReviewLogData,
   UpdateReviewStateData,
+  ReviewEvent,
 } from "../../db/reviews.js";
+
+function getTimeOfDayBucket(date: Date): string {
+  const hour = date.getHours();
+  if (hour < 6) return "night";
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
+}
 
 // Get due cards for review
 export const getDueCardsTool = createTool({
@@ -183,6 +193,10 @@ export const startReviewTool = createTool({
       .string()
       .optional()
       .describe("Session ID for tracking review sessions"),
+    position_in_session: z
+      .number()
+      .optional()
+      .describe("Position of the card within the session"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -353,8 +367,9 @@ export const submitReviewTool = createTool({
         };
       }
 
-      // Calculate latency
-      const latencyMs = Date.now() - context.start_time;
+      // Calculate timing
+      const tsAnswered = new Date();
+      const latencyMs = tsAnswered.getTime() - context.start_time;
 
       // Apply SM-2 algorithm
       logger?.info("📝 [SubmitReview] Applying SM-2 algorithm:", {
@@ -411,9 +426,33 @@ export const submitReviewTool = createTool({
         direction: "front_to_back",
       };
 
+      const tsShown = new Date(context.start_time);
+      const scheduledAt = new Date(`${currentReviewState.due_date}T00:00:00Z`);
+      const reviewEvent: ReviewEvent = {
+        card_id: context.card_id,
+        ts_shown: tsShown,
+        ts_answered: tsAnswered,
+        grade: context.grade,
+        scheduled_at: scheduledAt,
+        prev_review_at: currentReviewState.last_reviewed_at,
+        prev_interval_days: currentReviewState.interval_days,
+        due_interval_days: sm2Result.interval_days,
+        was_overdue: tsShown > scheduledAt,
+        ease_factor: sm2Result.ease_factor,
+        repetition: sm2Result.repetitions,
+        lapses: sm2Result.lapses,
+        is_new: currentReviewState.repetitions === 0,
+        answer_latency_ms: latencyMs,
+        session_id: context.session_id,
+        position_in_session: context.position_in_session,
+        time_of_day_bucket: getTimeOfDayBucket(tsAnswered),
+        weekday: tsAnswered.getDay(),
+      };
+
       await withTransaction(async (client) => {
         await updateReviewState(context.card_id, updateData, client);
         await createReviewLog(reviewLogData, client);
+        await logReview(reviewEvent, client);
       });
 
       // Prepare response messages based on grade
