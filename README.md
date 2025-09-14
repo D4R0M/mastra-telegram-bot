@@ -1,6 +1,7 @@
 # Telegram Vocabulary Bot - Mastra Edition
 
-A sophisticated vocabulary learning bot for Telegram that implements spaced repetition using the SM-2 algorithm. Built with the [Mastra framework](https://mastra.ai/en/docs) for workflow orchestration and advanced agent capabilities.
+A pure Anki-style vocabulary flashcard bot for Telegram that implements active recall and spaced repetition using the SM-2 algorithm. The bot operates with deterministic logic only—no AI/LLM APIs.
+Built with the [Mastra framework](https://mastra.ai/en/docs) for workflow orchestration and advanced agent capabilities.
 
 ## Features
 
@@ -137,11 +138,20 @@ The bot will use **polling mode** in development (no webhook required).
 
 Built on the **[Mastra framework](https://mastra.ai/en/docs)** with:
 
-- **Agent-based Workflows**: Orchestrated task execution with Inngest
-- **PostgreSQL Storage**: Persistent data with automatic migrations
-- **Tool System**: Modular functionality (vocabulary, reviews, statistics, etc.)
-- **Memory Management**: Conversation state tracking for multi-step interactions
-- **Error Handling**: Comprehensive logging and graceful error recovery
+- **Agent-based workflows** orchestrated with Inngest
+- **Deterministic command parser** handling `/add`, `/practice`, `/list`, and other commands without AI dependencies
+- **Tool system** covering vocabulary, review, statistics, settings, import/export, and reminders
+- **PostgreSQL storage** implementing SM-2 review states, logs, and user preferences
+- **Persistent memory** via `PostgresStore` for conversation context
+- **Modular TypeScript codebase** with a custom migration system
+- **Error handling** through structured logging and graceful recovery
+
+## Dependencies
+
+- **Core Framework**: `@mastra/core`, `@mastra/inngest`, `@mastra/pg`, `@mastra/memory`, `@mastra/loggers`
+- **Database & Storage**: `pg`, `@types/pg`
+- **External Services**: Telegram Bot API, `@slack/web-api`, `exa-js`
+- **Development & Tooling**: `inngest`, `inngest-cli`, `tsx`, `dotenv`, `zod`, `pino`, `prettier`
 
 ## Database Schema
 
