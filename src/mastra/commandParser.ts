@@ -496,7 +496,7 @@ async function handleReviewSessionFlow(
             const motivationLine =
               newStreak >= 3 ? "\n🔥 You’re on a roll!" : "";
             return {
-              response: `${grade >= 3 ? "✅" : "📝"} Recorded (Grade: ${grade})\n\n${progressLine}${streakLine}${motivationLine}\n\n❓ <b>${nextCard.front}</b>\n\n<i>Try to recall the answer, then type your response or type \"show\" to reveal.</i>`,
+              response: `${grade >= 3 ? "✅" : "📝"} Recorded: Grade ${grade}\n\n${progressLine}${streakLine}${motivationLine}\n\n❓ <b>${nextCard.front}</b>\n\n<i>Try to recall the answer, then type your response or type \"show\" to reveal.</i>`,
               conversationState: {
                 mode: "review_session",
                 step: 1,
@@ -528,7 +528,7 @@ async function handleReviewSessionFlow(
             const seconds = Math.floor((durationMs % 60000) / 1000);
             const durationStr = `${minutes}m ${seconds}s`;
 
-            let summary = `🎉 <b>Session Complete!</b>\n\n${result.message}\n\n✅ Correct: ${updatedCorrect}\n❌ Incorrect: ${updatedIncorrect}\nAccuracy: ${accuracy}%\n⏱️ Duration: ${durationStr}`;
+            let summary = `${grade >= 3 ? "✅" : "📝"} Recorded: Grade ${grade}\n\n🎉 <b>Session Complete!</b>\n\n${result.message}\n\n✅ Correct: ${updatedCorrect}\n❌ Incorrect: ${updatedIncorrect}\nAccuracy: ${accuracy}%\n⏱️ Duration: ${durationStr}`;
 
             try {
               const { getComprehensiveStatsTool } = await import(

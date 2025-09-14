@@ -124,6 +124,17 @@ export async function processTelegramUpdate(
         const action = data.split(":")[1];
         result = await handleExportCallback(action, existingState);
         commandHandled = `callback_export_${action}`;
+      } else if (data.startsWith("grade:")) {
+        const grade = data.split(":")[1];
+        result = await processCommand(
+          grade,
+          userIdStr,
+          chatId,
+          existingState,
+          mastra,
+          expired,
+        );
+        commandHandled = `callback_grade_${grade}`;
       } else {
         result = await processCommand(
           data,
