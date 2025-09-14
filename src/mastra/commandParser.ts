@@ -5,7 +5,11 @@ import { submitReviewTool } from "./tools/reviewTools.js";
 import { importCSVTool, previewCSVTool } from "./tools/importExportTools.js";
 import { commandRegistry } from "./commands/index.js";
 import { formatCard } from "./commands/utils.js";
-import { updateSessionSettingsTool } from "./tools/settingsTools.js";
+import {
+  updateSessionSettingsTool,
+  getUserSettingsTool,
+  updateAlgorithmSettingsTool,
+} from "./tools/settingsTools.js";
 import { updateReminderSettingsTool } from "./tools/reminderTools.js";
 import { clearConversationState } from "./conversationStateStorage.js";
 
@@ -785,6 +789,53 @@ async function handleSettingsMenuFlow(
     }
   }
 
+  if (state.step === 2 && action === "language") {
+    const lang = input.toLowerCase();
+    if (!/^[a-z]{2}$/.test(lang)) {
+      return {
+        response: "❌ Please enter a valid language code (e.g., en, sv)",
+        conversationState: state,
+        parse_mode: "HTML",
+      };
+    }
+
+    try {
+      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+        requestId: userId,
+      });
+      const result = await updateAlgorithmSettingsTool.execute({
+        context: {
+          user_id: userId,
+          locale: lang,
+        },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+
+      if (result.success) {
+        return {
+          response: `✅ Language updated to <b>${lang}</b>`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      } else {
+        return {
+          response: `❌ ${result.message}`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      }
+    } catch (error) {
+      logger?.error("❌ [CommandParser] Error updating language:", error);
+      return {
+        response: "❌ Error updating language. Please try again.",
+        conversationState: undefined,
+        parse_mode: "HTML",
+      };
+    }
+  }
+
   if (state.step === 2 && action === "session_size") {
     const size = parseInt(input, 10);
     if (isNaN(size) || size <= 0) {
@@ -826,6 +877,151 @@ async function handleSettingsMenuFlow(
       logger?.error("❌ [CommandParser] Error updating session size:", error);
       return {
         response: "❌ Error updating session size. Please try again.",
+        conversationState: undefined,
+        parse_mode: "HTML",
+      };
+    }
+  }
+
+  if (state.step === 2 && action === "new_cards") {
+    const count = parseInt(input, 10);
+    if (isNaN(count) || count < 0) {
+      return {
+        response: "❌ Please enter a valid number for new cards",
+        conversationState: state,
+        parse_mode: "HTML",
+      };
+    }
+
+    try {
+      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+        requestId: userId,
+      });
+      const result = await updateSessionSettingsTool.execute({
+        context: {
+          user_id: userId,
+          daily_new_limit: count,
+        },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+
+      if (result.success) {
+        return {
+          response: `✅ Daily new cards updated to <b>${count}</b>`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      } else {
+        return {
+          response: `❌ ${result.message}`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      }
+    } catch (error) {
+      logger?.error("❌ [CommandParser] Error updating new cards:", error);
+      return {
+        response: "❌ Error updating new cards. Please try again.",
+        conversationState: undefined,
+        parse_mode: "HTML",
+      };
+    }
+  }
+
+  if (state.step === 2 && action === "daily_reviews") {
+    const count = parseInt(input, 10);
+    if (isNaN(count) || count < 0) {
+      return {
+        response: "❌ Please enter a valid number for daily reviews",
+        conversationState: state,
+        parse_mode: "HTML",
+      };
+    }
+
+    try {
+      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+        requestId: userId,
+      });
+      const result = await updateSessionSettingsTool.execute({
+        context: {
+          user_id: userId,
+          daily_review_limit: count,
+        },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+
+      if (result.success) {
+        return {
+          response: `✅ Daily reviews updated to <b>${count}</b>`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      } else {
+        return {
+          response: `❌ ${result.message}`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      }
+    } catch (error) {
+      logger?.error("❌ [CommandParser] Error updating daily reviews:", error);
+      return {
+        response: "❌ Error updating daily reviews. Please try again.",
+        conversationState: undefined,
+        parse_mode: "HTML",
+      };
+    }
+  }
+
+  if (state.step === 2 && action === "reminder_times") {
+    const times = input
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const regex = /^\d{2}:\d{2}$/;
+    if (times.length === 0 || times.some((t) => !regex.test(t))) {
+      return {
+        response: "❌ Please enter times in HH:MM format, separated by commas",
+        conversationState: state,
+        parse_mode: "HTML",
+      };
+    }
+
+    try {
+      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+        requestId: userId,
+      });
+      const result = await updateReminderSettingsTool.execute({
+        context: {
+          user_id: userId,
+          reminder_times: times,
+        },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+
+      if (result.success) {
+        return {
+          response: `✅ Reminder times updated to <b>${times.join(", ")}</b>`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      } else {
+        return {
+          response: `❌ ${result.message}`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      }
+    } catch (error) {
+      logger?.error("❌ [CommandParser] Error updating reminder times:", error);
+      return {
+        response: "❌ Error updating reminder times. Please try again.",
         conversationState: undefined,
         parse_mode: "HTML",
       };
@@ -935,13 +1131,14 @@ export async function handleSettingsCallback(
   const logger = mastra?.getLogger();
 
   try {
+    const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+      requestId: userId,
+    });
+
     if (action === "toggle_reminders") {
       const { getReminderSettingsTool } = await import(
         "./tools/reminderTools.js"
       );
-      const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
-        requestId: userId,
-      });
       const current = await getReminderSettingsTool.execute({
         context: { user_id: userId },
         runtimeContext,
@@ -975,8 +1172,16 @@ export async function handleSettingsCallback(
     }
 
     if (action === "change_timezone") {
+      const current = await getUserSettingsTool.execute({
+        context: { user_id: userId },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+      const tz =
+        current.success && current.settings ? current.settings.timezone : "";
       return {
-        response: "🌍 Please enter your timezone (e.g., Europe/Stockholm)",
+        response: `🌍 Enter new timezone (Current: ${tz})`,
         conversationState: {
           mode: "settings_menu",
           step: 2,
@@ -986,15 +1191,139 @@ export async function handleSettingsCallback(
       };
     }
 
-    if (action === "session_size") {
+    if (action === "change_language") {
+      const current = await getUserSettingsTool.execute({
+        context: { user_id: userId },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+      const lang =
+        current.success && current.settings ? current.settings.locale : "";
       return {
-        response: "📚 Enter new session size (number of cards per session)",
+        response: `🌐 Enter language code (Current: ${lang})`,
         conversationState: {
           mode: "settings_menu",
           step: 2,
-          data: { action: "session_size" },
+          data: { action: "language" },
         },
         parse_mode: "HTML",
+      };
+    }
+
+    if (
+      action === "new_cards" ||
+      action === "daily_reviews" ||
+      action === "session_size"
+    ) {
+      const current = await getUserSettingsTool.execute({
+        context: { user_id: userId },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+      let currentVal = "";
+      let prompt = "";
+      if (current.success && current.settings) {
+        if (action === "new_cards")
+          currentVal = String(current.settings.daily_new_limit);
+        if (action === "daily_reviews")
+          currentVal = String(current.settings.daily_review_limit);
+        if (action === "session_size")
+          currentVal = String(current.settings.session_size);
+      }
+      if (action === "new_cards") prompt = "How many new cards per day?";
+      else if (action === "daily_reviews") prompt = "Max reviews per day?";
+      else prompt = "Number of cards per session?";
+      return {
+        response: `${prompt} (Current: ${currentVal})`,
+        conversationState: {
+          mode: "settings_menu",
+          step: 2,
+          data: { action },
+        },
+        parse_mode: "HTML",
+      };
+    }
+
+    if (action === "reminder_times") {
+      const current = await getUserSettingsTool.execute({
+        context: { user_id: userId },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+      const times =
+        current.success && current.settings
+          ? current.settings.reminder_times.join(", ")
+          : "";
+      return {
+        response: `⏰ Enter reminder times (HH:MM, comma-separated). Current: ${times}`,
+        conversationState: {
+          mode: "settings_menu",
+          step: 2,
+          data: { action: "reminder_times" },
+        },
+        parse_mode: "HTML",
+      };
+    }
+
+    if (action === "advanced") {
+      const current = await getUserSettingsTool.execute({
+        context: { user_id: userId },
+        runtimeContext,
+        tracingContext,
+        mastra,
+      });
+      const alg =
+        current.success && current.settings
+          ? current.settings.algorithm.toUpperCase()
+          : "SM2";
+      return {
+        response: [
+          `<b>⚡ Advanced Settings</b>`,
+          `🧠 Algorithm: ${alg}`,
+          `📂 Backup: use /export`,
+          `🔄 Auto-sync: not available`,
+        ].join("\n"),
+        parse_mode: "HTML",
+        inline_keyboard: {
+          inline_keyboard: [
+            [{ text: "⬅ Back", callback_data: "settings:back" }],
+          ],
+        },
+      };
+    }
+
+    if (action === "back") {
+      const startHandler = commandRegistry["/start"];
+      if (startHandler) {
+        return startHandler([], "", userId, undefined, mastra);
+      }
+      return { response: "", parse_mode: "HTML" };
+    }
+
+    if (action === "export") {
+      const exportHandler = commandRegistry["/export"];
+      if (exportHandler) {
+        return exportHandler([], "", userId, undefined, mastra);
+      }
+      return { response: "❌ Export not available", parse_mode: "HTML" };
+    }
+
+    if (action === "reset") {
+      const resetHandler = commandRegistry["/reset"];
+      if (resetHandler) {
+        return resetHandler([], "", userId, undefined, mastra);
+      }
+      return { response: "❌ Reset not available", parse_mode: "HTML" };
+    }
+
+    if (action === "close") {
+      return {
+        response: "Settings closed.",
+        parse_mode: "HTML",
+        remove_keyboard: true,
       };
     }
 
