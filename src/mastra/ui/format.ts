@@ -131,6 +131,21 @@ export function fmtSettingsHTML(s: Settings) {
   ].join('\n');
 }
 
+export function fmtStartHTML() {
+  return [
+    '<b>👋 Welcome to Vocabulary Learning Bot!</b>',
+    '',
+    'I can help you build your vocabulary using spaced repetition.',
+    '',
+    '<b>Try these commands to begin:</b>',
+    '/add - save a new word',
+    '/practice - review your cards',
+    '/stats - see your progress',
+    '',
+    'Use the menu below or type a command to get started. Happy learning!'
+  ].join('\n');
+}
+
 export function fmtHelpHTML() {
   return [
     '<b>📚 Vocabulary Learning Bot Commands</b>',

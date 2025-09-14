@@ -1045,8 +1045,11 @@ export async function processCommand(
     }
   }
 
+  // Parse the command early so slash commands override conversations
+  const parsed = parseCommand(message);
+
   // Check if we're in the middle of a conversation flow
-  if (conversationState && conversationState.mode) {
+  if (conversationState && conversationState.mode && !parsed) {
     // Check for timeout (5 minutes)
     if (conversationState.lastMessageTime) {
       const timeDiff = Date.now() - conversationState.lastMessageTime;
@@ -1066,10 +1069,10 @@ export async function processCommand(
         mastra,
       );
     }
+  } else if (parsed && conversationState) {
+    // Clear conversation state when a new command is issued
+    conversationState = undefined;
   }
-
-  // Parse the command
-  const parsed = parseCommand(message);
 
   // If not a command and no active conversation, show help
   if (!parsed) {
