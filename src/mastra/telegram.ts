@@ -5,6 +5,7 @@ import {
   handleListCallback,
   handleSettingsCallback,
 } from "./commandParser.js";
+import { handleExportCallback } from "./commands/exportCallback.js";
 import {
   getConversationState,
   saveConversationState,
@@ -119,6 +120,10 @@ export async function processTelegramUpdate(
           parse_mode: "HTML",
         };
         commandHandled = "callback_open_stats_detail";
+      } else if (data.startsWith("export:")) {
+        const action = data.split(":")[1];
+        result = await handleExportCallback(action, existingState);
+        commandHandled = `callback_export_${action}`;
       } else {
         result = await processCommand(
           data,
@@ -170,36 +175,54 @@ export async function processTelegramUpdate(
       text: result.response,
       parse_mode: result.parse_mode || "HTML",
     };
-    if (result.inline_keyboard) {
-      body.reply_markup = result.inline_keyboard;
-    } else if (result.reply_keyboard) {
-      body.reply_markup = result.reply_keyboard;
-    } else if (result.remove_keyboard) {
-      body.reply_markup = { remove_keyboard: true };
-    }
-    if (result.edit_message_id) {
-      body.message_id = result.edit_message_id;
-      await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+    if (result.document) {
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      form.append(
+        "document",
+        new Blob([result.document.content], { type: "text/csv" }),
+        result.document.filename,
+      );
+      if (result.response) form.append("caption", result.response);
+      if (result.inline_keyboard) {
+        form.append("reply_markup", JSON.stringify(result.inline_keyboard));
+      }
+      await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: form,
       });
     } else {
-      const res = await fetch(
-        `https://api.telegram.org/bot${token}/sendMessage`,
-        {
+      if (result.inline_keyboard) {
+        body.reply_markup = result.inline_keyboard;
+      } else if (result.reply_keyboard) {
+        body.reply_markup = result.reply_keyboard;
+      } else if (result.remove_keyboard) {
+        body.reply_markup = { remove_keyboard: true };
+      }
+      if (result.edit_message_id) {
+        body.message_id = result.edit_message_id;
+        await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
-        },
-      );
-      const data: any = await res.json().catch(() => ({}));
-      const sentMessageId = data?.result?.message_id;
-      logger?.info("reply_sent", {
-        update_id: updateId,
-        ms: Date.now() - start,
-        message_id: sentMessageId,
-      });
+        });
+      } else {
+        const res = await fetch(
+          `https://api.telegram.org/bot${token}/sendMessage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+        );
+        const data: any = await res.json().catch(() => ({}));
+        const sentMessageId = data?.result?.message_id;
+        logger?.info("reply_sent", {
+          update_id: updateId,
+          ms: Date.now() - start,
+          message_id: sentMessageId,
+        });
+      }
     }
 
     logger?.info("command_handled", {

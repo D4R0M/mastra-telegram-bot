@@ -4,13 +4,18 @@ vi.mock('../src/db/cards.ts', () => ({
   createCard: vi.fn(async (data) => ({ id: '1', ...data })),
   getCardsByOwner: vi.fn(),
 }));
+vi.mock('../src/db/reviews.ts', () => ({
+  getDueCards: vi.fn(),
+}));
 
 import { createCard, getCardsByOwner } from '../src/db/cards.ts';
+import { getDueCards } from '../src/db/reviews.ts';
 import { importCSVTool, exportCSVTool } from '../src/mastra/tools/importExportTools.ts';
 
 describe('import/export CSV tools', () => {
   beforeEach(() => {
     vi.mocked(getCardsByOwner).mockReset();
+    vi.mocked(getDueCards).mockReset();
     vi.mocked(createCard).mockClear();
   });
 
@@ -63,5 +68,41 @@ describe('import/export CSV tools', () => {
     expect(result.csv_data).toBeDefined();
     expect(result.csv_data?.split('\n').length).toBe(2);
     expect(result.csv_data).toContain('"hi, there"');
+  });
+
+  it('exports due cards when due_only is true', async () => {
+    vi.mocked(getDueCards).mockResolvedValue([
+      {
+        card: {
+          id: '1',
+          owner_id: 'user1',
+          front: 'due',
+          back: 'card',
+          tags: [],
+          example: '',
+          lang_front: 'en',
+          lang_back: 'sv',
+          active: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+        review_state: { due_date: '2024-01-01' },
+      },
+    ]);
+
+    const result = await exportCSVTool.execute({
+      context: {
+        owner_id: 'user1',
+        include_inactive: false,
+        limit: 1000,
+        due_only: true,
+      },
+      mastra: undefined,
+    });
+
+    expect(getDueCards).toHaveBeenCalled();
+    expect(getCardsByOwner).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.card_count).toBe(1);
   });
 });

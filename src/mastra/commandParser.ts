@@ -24,7 +24,8 @@ export interface ConversationState {
     | "review_session"
     | "import_csv"
     | "settings_menu"
-    | "filter_cards";
+    | "filter_cards"
+    | "export_csv";
   step?: number;
   data?: any;
   lastMessageTime?: number;
@@ -38,6 +39,7 @@ export interface CommandResponse {
   parse_mode?: "HTML" | "Markdown";
   edit_message_id?: string; // For editing previous message
   remove_keyboard?: boolean; // To remove keyboard after selection
+  document?: { filename: string; content: string };
 }
 
 export interface ParsedCommand {

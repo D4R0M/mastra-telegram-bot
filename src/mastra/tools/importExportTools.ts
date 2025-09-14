@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
 import { createCard, getCardsByOwner } from "../../db/cards.js";
+import { getDueCards } from "../../db/reviews.js";
 import type { CreateCardData } from "../../db/cards.js";
 
 // Interface for CSV import/export data
@@ -15,7 +16,7 @@ interface CSVCard {
 }
 
 // Helper function to parse CSV data
-function parseCSV(csvData: string): string[][] {
+export function parseCSV(csvData: string): string[][] {
   const lines = csvData.trim().split(/\r?\n/);
   const result: string[][] = [];
 
@@ -330,6 +331,7 @@ export const exportCSVTool = createTool({
     include_inactive: z.boolean().default(false).describe("Whether to include inactive/deleted cards"),
     tags_filter: z.array(z.string()).optional().describe("Only export cards with these tags"),
     limit: z.number().optional().describe("Maximum number of cards to export"),
+    due_only: z.boolean().optional().default(false).describe("Only export cards that are due for review"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -343,12 +345,22 @@ export const exportCSVTool = createTool({
     logger?.info('🔧 [ExportCSV] Starting CSV export with params:', context);
 
     try {
-      // Get cards from database
-      const cards = await getCardsByOwner(context.owner_id, {
-        active: !context.include_inactive,
-        tags: context.tags_filter,
-        limit: context.limit,
-      });
+      let cards;
+      if (context.due_only) {
+        const dueData = await getDueCards(context.owner_id, context.limit);
+        cards = dueData.map((d) => d.card);
+        if (context.tags_filter && context.tags_filter.length > 0) {
+          cards = cards.filter((c: any) =>
+            context.tags_filter!.every((tag) => (c.tags || []).includes(tag)),
+          );
+        }
+      } else {
+        cards = await getCardsByOwner(context.owner_id, {
+          active: !context.include_inactive,
+          tags: context.tags_filter,
+          limit: context.limit,
+        });
+      }
 
       logger?.info('📝 [ExportCSV] Retrieved cards from database:', { count: cards.length });
 
