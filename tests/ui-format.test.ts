@@ -4,6 +4,7 @@ import {
   deltaArrow,
   fmtStatsHTML,
   fmtSettingsHTML,
+  fmtHelpHTML,
   type Stats,
   type Settings,
 } from "../src/mastra/ui/format.ts";
@@ -57,5 +58,13 @@ describe("format helpers", () => {
     expect(html).toContain("⚙️ General Settings");
     expect(html).toContain("📚 Study Settings");
     expect(html).toContain("🔔 Notifications");
+  });
+
+  it("formats help sections", () => {
+    const main = fmtHelpHTML();
+    expect(main).toContain("⭐ <b>Quick Start</b>");
+    const core = fmtHelpHTML("core");
+    expect(core).toContain("📌 Core Commands");
+    expect(core).toContain("🎯 <b>Grading Scale</b>");
   });
 });
