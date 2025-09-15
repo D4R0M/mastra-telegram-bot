@@ -4,11 +4,16 @@ vi.mock('../src/db/client.ts', () => ({
   getPool: () => ({ query: vi.fn() }),
 }));
 
-const { mockAdd, mockAddAlias, mockHelp, mockStart } = vi.hoisted(() => ({
+vi.mock('../src/mastra/authorization.ts', () => ({
+  isAdmin: vi.fn().mockResolvedValue(false),
+}));
+
+const { mockAdd, mockAddAlias, mockHelp, mockStart, mockCheckMlLog } = vi.hoisted(() => ({
   mockAdd: vi.fn(async () => ({ response: 'add' })),
   mockAddAlias: vi.fn(async () => ({ response: 'add-alias' })),
   mockHelp: vi.fn(async () => ({ response: 'help' })),
   mockStart: vi.fn(async () => ({ response: 'start' })),
+  mockCheckMlLog: vi.fn(async () => ({ response: 'check-ml-log' })),
 }));
 
 vi.mock('../src/mastra/commands/index.ts', () => ({
@@ -17,16 +22,23 @@ vi.mock('../src/mastra/commands/index.ts', () => ({
     '/a': mockAddAlias,
     '/help': mockHelp,
     '/start': mockStart,
+    '/check_ml_log': mockCheckMlLog,
   }
 }));
 
 import { parseCommand, processCommand } from '../src/mastra/commandParser.ts';
+import { isAdmin } from '../src/mastra/authorization.ts';
+
+const isAdminMock = vi.mocked(isAdmin);
 
 beforeEach(() => {
   mockAdd.mockClear();
   mockAddAlias.mockClear();
   mockHelp.mockClear();
   mockStart.mockClear();
+  mockCheckMlLog.mockClear();
+  isAdminMock.mockReset();
+  isAdminMock.mockResolvedValue(false);
 });
 
 describe('parseCommand', () => {
@@ -78,6 +90,15 @@ describe('processCommand', () => {
   it('returns unknown command message for unrecognized commands', async () => {
     const result = await processCommand('/unknown', 'user', 'chat');
     expect(result.response).toContain('Unknown command');
+  });
+
+  it('rejects /check_ml_log command for non-admin users', async () => {
+    const result = await processCommand('/check_ml_log', 'user', 'chat');
+
+    expect(result.response).toBe('Not authorized.');
+    expect(result.parse_mode).toBe('HTML');
+    expect(mockCheckMlLog).not.toHaveBeenCalled();
+    expect(isAdminMock).toHaveBeenCalledWith('user');
   });
 
   it('processes slash commands even with active conversation state', async () => {
