@@ -10,7 +10,7 @@ export default async function handleDenyCommand(
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
   if (!(await isAdmin(userId))) {
-    return { response: "Not authorized", parse_mode: "HTML" };
+    return { response: "Not authorized.", parse_mode: "HTML" };
   }
   const target = params[0];
   if (!target) {

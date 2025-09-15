@@ -120,6 +120,7 @@ export async function processTelegramUpdate(
           existingState,
           mastra,
           expired,
+          username,
         );
         commandHandled = "callback_practice_now";
       } else if (data === "add_card") {
@@ -130,6 +131,7 @@ export async function processTelegramUpdate(
           existingState,
           mastra,
           expired,
+          username,
         );
         commandHandled = "callback_add_card";
       } else if (data === "open_stats_detail") {
@@ -151,6 +153,7 @@ export async function processTelegramUpdate(
           existingState,
           mastra,
           expired,
+          username,
         );
         commandHandled = `callback_grade_${grade}`;
       } else if (data.startsWith("invite:")) {
@@ -204,6 +207,7 @@ export async function processTelegramUpdate(
           existingState,
           mastra,
           expired,
+          username,
         );
         const parsed = parseCommand(data);
         if (parsed?.command) {
@@ -228,7 +232,10 @@ export async function processTelegramUpdate(
         const fwdId = update.message.forward_from.id;
         if (/^\/allow\b/.test(text) && text.trim().split(/\s+/).length < 2) {
           text += ` ${fwdId}`;
-        } else if (/^\/deny\b/.test(text) && text.trim().split(/\s+/).length < 2) {
+        } else if (
+          /^\/deny\b/.test(text) &&
+          text.trim().split(/\s+/).length < 2
+        ) {
           text += ` ${fwdId}`;
         }
       }
@@ -239,6 +246,7 @@ export async function processTelegramUpdate(
         existingState,
         mastra,
         expired,
+        username,
       );
       const parsed = parseCommand(text);
       if (parsed?.command) {

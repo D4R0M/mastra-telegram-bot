@@ -27,14 +27,17 @@ import start from "./start.js";
 import debugReminders from "./debugReminders.js";
 import allow from "./allow.js";
 import deny from "./deny.js";
-import whitelistList from "./whitelistList.js";
-import whitelistExport from "./whitelistExport.js";
+import users from "./users.js";
+import exportUsers from "./exportUsers.js";
 import invite from "./invite.js";
+import adminHelp from "./adminhelp.js";
+import promote from "./promote.js";
+import demote from "./demote.js";
 
 export const commandRegistry: Record<string, CommandHandler> = {
   "/add": add,
   "/a": add,
-  "/l": list,
+  "/list": list,
   "/cards": list,
   "/export_cards": exportCmd,
   "/practice": practice,
@@ -68,7 +71,10 @@ export const commandRegistry: Record<string, CommandHandler> = {
   "/debug_reminders": debugReminders,
   "/allow": allow,
   "/deny": deny,
-  "/list": whitelistList,
-  "/export": whitelistExport,
+  "/users": users,
+  "/export_users": exportUsers,
   "/invite": invite,
+  "/promote": promote,
+  "/demote": demote,
+  "/adminhelp": adminHelp,
 };
