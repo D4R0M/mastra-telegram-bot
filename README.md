@@ -115,7 +115,7 @@ The bot will use **polling mode** in development (no webhook required).
 
 - `PORT`: Server port (Railway sets this automatically)
 - `INNGEST_CONFIG`: Custom Inngest configuration path
-- `ALLOWED_USER_IDS`: Comma-separated Telegram user IDs allowed to use the bot
+- `ADMIN_USER_IDS`: Comma-separated Telegram user IDs with admin access
 
 ### API Endpoints
 
@@ -152,7 +152,7 @@ For minimal latency in production, deploy the app and its PostgreSQL database in
 - `/stats` - View learning statistics
 - `/settings` - Manage bot preferences
 - `/import` - Import cards from CSV
-- `/export` - Export cards to CSV
+ - `/export_cards` - Export cards to CSV
 
 **Development Scripts:**
 

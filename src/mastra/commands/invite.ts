@@ -9,7 +9,7 @@ export default async function handleInviteCommand(
   mastra?: any,
 ): Promise<CommandResponse> {
   if (!(await isAdmin(userId))) {
-    return { response: "Not authorized", parse_mode: "HTML" };
+    return { response: "Not authorized.", parse_mode: "HTML" };
   }
   const code = generateInvite(userId);
   const botName = process.env.TELEGRAM_BOT_USERNAME || "";

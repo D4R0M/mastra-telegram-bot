@@ -1,11 +1,11 @@
-import NodeCache from 'node-cache';
+import NodeCache from "node-cache";
 import {
   upsertWhitelistUser,
   removeWhitelistUser,
   listWhitelist,
   exportWhitelist,
   fetchWhitelist,
-} from '../db/userWhitelist.js';
+} from "../db/userWhitelist.js";
 
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 let seeded = false;
@@ -13,11 +13,11 @@ let useDb = true;
 const memoryWhitelist = new Map<string, { role: string }>();
 
 function invalidate() {
-  cache.del('whitelist');
+  cache.del("whitelist");
 }
 
 async function loadCache() {
-  if (!cache.has('whitelist')) {
+  if (!cache.has("whitelist")) {
     if (useDb) {
       try {
         const rows = await fetchWhitelist();
@@ -25,13 +25,13 @@ async function loadCache() {
         for (const r of rows) {
           map.set(String(r.user_id), { role: r.role });
         }
-        cache.set('whitelist', map);
+        cache.set("whitelist", map);
       } catch (e) {
         useDb = false;
       }
     }
     if (!useDb) {
-      cache.set('whitelist', new Map(memoryWhitelist));
+      cache.set("whitelist", new Map(memoryWhitelist));
     }
   }
 }
@@ -39,30 +39,35 @@ async function loadCache() {
 async function seedAdmins() {
   if (seeded) return;
   seeded = true;
-  const env = process.env.ADMIN_USER_IDS || '';
-  const ids = env.split(',').map((s) => s.trim()).filter(Boolean);
+  const env = process.env.ADMIN_USER_IDS || "";
+  const ids = env
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   for (const id of ids) {
     if (useDb) {
       try {
-        await upsertWhitelistUser({ user_id: id, role: 'admin' });
+        await upsertWhitelistUser({ user_id: id, role: "admin" });
       } catch {
         useDb = false;
-        memoryWhitelist.set(id, { role: 'admin' });
+        memoryWhitelist.set(id, { role: "admin" });
       }
     } else {
-      memoryWhitelist.set(id, { role: 'admin' });
+      memoryWhitelist.set(id, { role: "admin" });
     }
   }
   invalidate();
 }
 
-export async function isAdmin(userId: string | number | undefined): Promise<boolean> {
+export async function isAdmin(
+  userId: string | number | undefined,
+): Promise<boolean> {
   if (userId === undefined || userId === null) return false;
   await seedAdmins();
   await loadCache();
-  const map = cache.get('whitelist') as Map<string, { role: string }>;
+  const map = cache.get("whitelist") as Map<string, { role: string }>;
   const u = map.get(String(userId));
-  return u?.role === 'admin';
+  return u?.role === "admin";
 }
 
 export async function isAuthorizedTelegramUser(
@@ -71,7 +76,7 @@ export async function isAuthorizedTelegramUser(
   if (userId === undefined || userId === null) return false;
   await seedAdmins();
   await loadCache();
-  const map = cache.get('whitelist') as Map<string, { role: string }>;
+  const map = cache.get("whitelist") as Map<string, { role: string }>;
   return map.has(String(userId));
 }
 
@@ -91,10 +96,10 @@ export async function allowUser(
       });
     } catch {
       useDb = false;
-      memoryWhitelist.set(userId, { role: 'user' });
+      memoryWhitelist.set(userId, { role: "user" });
     }
   } else {
-    memoryWhitelist.set(userId, { role: 'user' });
+    memoryWhitelist.set(userId, { role: "user" });
   }
   invalidate();
 }
@@ -109,6 +114,36 @@ export async function denyUser(userId: string): Promise<void> {
     }
   } else {
     memoryWhitelist.delete(userId);
+  }
+  invalidate();
+}
+
+export async function promoteUser(userId: string): Promise<void> {
+  if (useDb) {
+    try {
+      await upsertWhitelistUser({ user_id: userId, role: "admin" });
+    } catch {
+      useDb = false;
+      memoryWhitelist.set(userId, { role: "admin" });
+    }
+  } else {
+    memoryWhitelist.set(userId, { role: "admin" });
+  }
+  invalidate();
+}
+
+export async function demoteUser(userId: string): Promise<void> {
+  if (useDb) {
+    try {
+      await upsertWhitelistUser({ user_id: userId, role: "user" });
+    } catch {
+      useDb = false;
+      memoryWhitelist.set(userId, { role: "user" });
+    }
+  } else {
+    if (memoryWhitelist.has(userId)) {
+      memoryWhitelist.set(userId, { role: "user" });
+    }
   }
   invalidate();
 }
@@ -173,7 +208,10 @@ export function generateInvite(adminId: string): string {
   return code;
 }
 
-export function consumeInvite(code: string, userId: string): InviteEntry | null {
+export function consumeInvite(
+  code: string,
+  userId: string,
+): InviteEntry | null {
   const entry = inviteCodes.get(code);
   if (!entry) return null;
   entry.userId = userId;

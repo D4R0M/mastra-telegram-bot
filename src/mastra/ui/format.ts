@@ -133,7 +133,9 @@ export function fmtStreakHTML(s: Streak) {
 
   const streakIcons = "🔥".repeat(Math.min(current, 10));
   if (streakIcons) {
-    lines.push(`${streakIcons} (${current} day${current === 1 ? "" : "s"})${longest > current ? ` — Keep going to hit ${current + 1}!` : ""}`);
+    lines.push(
+      `${streakIcons} (${current} day${current === 1 ? "" : "s"})${longest > current ? ` — Keep going to hit ${current + 1}!` : ""}`,
+    );
   }
 
   if (current === 3) {
@@ -143,7 +145,9 @@ export function fmtStreakHTML(s: Streak) {
     lines.push("🚀 Longest streak yet!");
   } else if (longest > current) {
     const diff = longest - current;
-    lines.push(`➡️ Only ${diff} more day${diff === 1 ? "" : "s"} to beat your record!`);
+    lines.push(
+      `➡️ Only ${diff} more day${diff === 1 ? "" : "s"} to beat your record!`,
+    );
   }
 
   if (current >= 30) {
@@ -236,7 +240,7 @@ export function fmtHelpHTML(section: string = "main") {
       "",
       "/edit [id] → Edit a card",
       "/delete [id] → Delete a card",
-      "/export → Export cards to CSV",
+      "/export_cards → Export cards to CSV",
       "/import → Import cards from CSV",
     ].join("\n");
   }

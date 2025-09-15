@@ -5,6 +5,7 @@ import { addCardTool, editCardTool } from "./tools/vocabularyTools.js";
 import { submitReviewTool } from "./tools/reviewTools.js";
 import { importCSVTool, previewCSVTool } from "./tools/importExportTools.js";
 import { commandRegistry } from "./commands/index.js";
+import { isAdmin } from "./authorization.js";
 import { formatCard } from "./commands/utils.js";
 import {
   updateSessionSettingsTool,
@@ -21,6 +22,17 @@ export interface ParsedCommand {
   params: string[];
   rawParams?: string;
 }
+
+const ADMIN_COMMANDS = new Set([
+  "/users",
+  "/allow",
+  "/deny",
+  "/invite",
+  "/export_users",
+  "/promote",
+  "/demote",
+  "/adminhelp",
+]);
 
 // ===============================
 // Helper Functions
@@ -1331,7 +1343,7 @@ export async function handleSettingsCallback(
         response: [
           `<b>⚡ Advanced Settings</b>`,
           `🧠 Algorithm: ${alg}`,
-          `📂 Backup: use /export`,
+          `📂 Backup: use /export_cards`,
           `🔄 Auto-sync: not available`,
         ].join("\n"),
         parse_mode: "HTML",
@@ -1352,7 +1364,7 @@ export async function handleSettingsCallback(
     }
 
     if (action === "export") {
-      const exportHandler = commandRegistry["/export"];
+      const exportHandler = commandRegistry["/export_cards"];
       if (exportHandler) {
         return exportHandler([], "", userId, undefined, mastra);
       }
@@ -1400,6 +1412,7 @@ export async function processCommand(
   conversationState?: ConversationState,
   mastra?: any,
   stateExpired: boolean = false,
+  username?: string,
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
   logger?.info("🔧 [CommandParser] Processing message:", {
@@ -1497,6 +1510,17 @@ export async function processCommand(
   } else if (parsed && conversationState) {
     // Clear conversation state when a new command is issued
     conversationState = undefined;
+  }
+
+  if (parsed && ADMIN_COMMANDS.has(parsed.command)) {
+    if (!(await isAdmin(userId))) {
+      logger?.warn("unauthorized_admin_command", {
+        command: parsed.command,
+        userId,
+        username,
+      });
+      return { response: "Not authorized.", parse_mode: "HTML" };
+    }
   }
 
   // If not a command and no active conversation, show help
