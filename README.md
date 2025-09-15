@@ -123,6 +123,12 @@ The bot will use **polling mode** in development (no webhook required).
 - `POST /webhooks/telegram/action` - Telegram webhook endpoint
 - `POST /api/inngest` - Inngest workflow registration
 
+### Scheduled reminders (Inngest)
+
+- `INNGEST_EVENT_KEY` (and optionally `INNGEST_SIGNING_KEY`) must be set
+- Cron `schedule.check-due` runs every 2 minutes to send due card reminders
+- Verify in the Inngest dashboard under the function's **Runs** and **Last run** tabs
+
 ### Performance
 
 The Telegram webhook now ACKs updates immediately (<100 ms) and processes work asynchronously after the response.
