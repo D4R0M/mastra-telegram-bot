@@ -1,4 +1,4 @@
-import type { CommandResponse, ConversationState } from "../commandParser.js";
+import type { CommandResponse, ConversationState } from "../commandTypes.js";
 import { buildToolExecCtx } from "../context.js";
 import { getUserSettingsTool } from "../tools/settingsTools.js";
 import { fmtSettingsHTML, type Settings as SettingsUI } from "../ui/format.js";

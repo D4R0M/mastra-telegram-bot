@@ -1,4 +1,4 @@
-import type { CommandResponse, ConversationState } from "../commandParser.js";
+import type { CommandResponse, ConversationState } from "../commandTypes.js";
 import { buildToolExecCtx } from "../context.js";
 import { getStreakStatsTool } from "../tools/statisticsTools.js";
 import { fmtStreakHTML, type Streak } from "../ui/format.js";

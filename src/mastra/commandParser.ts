@@ -1,4 +1,5 @@
 import type { IMastraLogger } from "@mastra/core/logger";
+import type { CommandResponse, ConversationState } from "./commandTypes.js";
 import { buildToolExecCtx } from "./context.js";
 import { addCardTool, editCardTool } from "./tools/vocabularyTools.js";
 import { submitReviewTool } from "./tools/reviewTools.js";
@@ -13,34 +14,7 @@ import {
 import { updateReminderSettingsTool } from "./tools/reminderTools.js";
 import { clearConversationState } from "./conversationStateStorage.js";
 
-// ===============================
-// Types and Interfaces
-// ===============================
-
-export interface ConversationState {
-  mode?:
-    | "add_card_guided"
-    | "edit_card"
-    | "review_session"
-    | "import_csv"
-    | "settings_menu"
-    | "filter_cards"
-    | "export_csv";
-  step?: number;
-  data?: any;
-  lastMessageTime?: number;
-}
-
-export interface CommandResponse {
-  response: string;
-  conversationState?: ConversationState;
-  inline_keyboard?: any;
-  reply_keyboard?: any;
-  parse_mode?: "HTML" | "Markdown";
-  edit_message_id?: string; // For editing previous message
-  remove_keyboard?: boolean; // To remove keyboard after selection
-  document?: { filename: string; content: string };
-}
+export type { CommandResponse, ConversationState } from "./commandTypes.js";
 
 export interface ParsedCommand {
   command: string;

@@ -1,4 +1,4 @@
-import type { CommandResponse, ConversationState } from "../commandParser.js";
+import type { CommandResponse, ConversationState } from "../commandTypes.js";
 import { fmtHelpHTML } from "../ui/format.js";
 
 export default async function handleHelpCommand(

@@ -1,4 +1,4 @@
-import type { ConversationState, CommandResponse } from "../commandParser.js";
+import type { ConversationState, CommandResponse } from "../commandTypes.js";
 
 export default async function handleEditCommand(
   params: string[],

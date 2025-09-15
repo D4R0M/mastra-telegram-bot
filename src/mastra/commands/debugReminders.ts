@@ -1,4 +1,4 @@
-import type { CommandResponse } from "../commandParser.js";
+import type { CommandResponse } from "../commandTypes.js";
 import { getPool } from "../../db/client.js";
 import { isAuthorizedTelegramUser } from "../authorization.js";
 

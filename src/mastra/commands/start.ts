@@ -1,4 +1,4 @@
-import type { CommandResponse, ConversationState } from "../commandParser.js";
+import type { CommandResponse, ConversationState } from "../commandTypes.js";
 import { fmtStartHTML } from "../ui/format.js";
 
 export default async function handleStartCommand(

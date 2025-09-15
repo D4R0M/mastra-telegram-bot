@@ -1,6 +1,6 @@
 import { getPool } from "../db/client.js";
 import NodeCache from "node-cache";
-import type { ConversationState } from "./commandParser";
+import type { ConversationState } from "./commandTypes.js";
 
 export interface ConversationStateResult {
   state: ConversationState | undefined;
