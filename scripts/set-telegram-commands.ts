@@ -29,6 +29,7 @@ const adminCommands = [
   { command: "export_users", description: "Export whitelist CSV" },
   { command: "promote", description: "Promote user to admin" },
   { command: "demote", description: "Demote admin to user" },
+  { command: "check_ml_log", description: "Review ML logging status" },
   { command: "adminhelp", description: "Show admin commands" },
 ];
 

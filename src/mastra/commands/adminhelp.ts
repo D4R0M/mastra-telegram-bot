@@ -10,6 +10,7 @@ const ADMIN_HELP = [
   "/export_users - export whitelist CSV",
   "/promote <user_id> - grant admin rights",
   "/demote <user_id> - revoke admin rights",
+  "/check_ml_log - review ML logging status",
 ].join("\n");
 
 export default async function handleAdminHelpCommand(
