@@ -84,7 +84,7 @@ export async function processTelegramUpdate(
   if (userId) {
     try {
       await upsertUser({
-        user_id: userIdStr,
+        user_id: userId,
         username,
         first_name,
         last_name,

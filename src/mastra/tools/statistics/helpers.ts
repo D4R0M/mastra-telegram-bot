@@ -62,7 +62,7 @@ interface EaseHistogram {
 }
 
 export async function getDueCardsStats(
-  user_id: string,
+  user_id: number,
   timezone: string = "Europe/Stockholm",
   logger?: IMastraLogger,
 ) {
@@ -93,7 +93,7 @@ export async function getDueCardsStats(
       COALESCE(SUM(rs.repetitions), 0) as total_reviews
     FROM review_state rs
     JOIN cards c ON rs.card_id = c.id
-    WHERE rs.user_id = $1::bigint AND c.active = true
+    WHERE rs.user_id = $1 AND c.active = true
   `;
 
   const result = await pool.query(statsQuery, [user_id, today, tomorrow]);
@@ -117,7 +117,7 @@ export async function getDueCardsStats(
 }
 
 export async function getRetentionStats(
-  user_id: string,
+  user_id: number,
   success_threshold: number = 3,
   logger?: IMastraLogger,
 ) {
@@ -146,7 +146,7 @@ export async function getRetentionStats(
         COUNT(CASE WHEN rl.reviewed_at >= $4 AND rl.grade >= $2 THEN 1 END) as successful_last_30_days
       FROM review_log rl
       JOIN cards c ON rl.card_id = c.id
-      WHERE rl.user_id = $1::bigint AND c.active = true
+      WHERE rl.user_id = $1 AND c.active = true
     ),
     card_maturity AS (
       SELECT 
@@ -154,7 +154,7 @@ export async function getRetentionStats(
         COUNT(CASE WHEN rs.interval_days < 21 AND rs.interval_days > 0 THEN 1 END) as young_cards
       FROM review_state rs
       JOIN cards c ON rs.card_id = c.id
-      WHERE rs.user_id = $1::bigint AND c.active = true
+      WHERE rs.user_id = $1 AND c.active = true
     )
     SELECT 
       rs.*,
@@ -204,7 +204,7 @@ export async function getRetentionStats(
 }
 
 export async function getStreakStats(
-  user_id: string,
+  user_id: number,
   timezone: string = "Europe/Stockholm",
   logger?: IMastraLogger,
 ) {
@@ -226,7 +226,7 @@ export async function getStreakStats(
       DATE(rl.reviewed_at) as review_date,
       COUNT(*) as reviews_count
     FROM review_log rl
-    WHERE rl.user_id = $1::bigint
+    WHERE rl.user_id = $1
     GROUP BY DATE(rl.reviewed_at)
     ORDER BY review_date DESC
   `;
@@ -242,10 +242,10 @@ export async function getStreakStats(
     JOIN (
       SELECT DATE(reviewed_at) as date, COUNT(*) as daily_reviews
       FROM review_log rl2
-      WHERE rl2.user_id = $1::bigint
+      WHERE rl2.user_id = $1
       GROUP BY DATE(reviewed_at)
     ) daily_counts ON DATE(rl.reviewed_at) = daily_counts.date
-    WHERE rl.user_id = $1::bigint
+    WHERE rl.user_id = $1
   `;
 
   const [reviewDatesResult, overallStatsResult] = await Promise.all([
@@ -344,7 +344,7 @@ export async function getStreakStats(
 }
 
 export async function getEaseHistogram(
-  user_id: string,
+  user_id: number,
   bin_size: number = 0.2,
   logger?: IMastraLogger,
 ) {
@@ -364,7 +364,7 @@ export async function getEaseHistogram(
     SELECT rs.ease_factor
     FROM review_state rs
     JOIN cards c ON rs.card_id = c.id
-    WHERE rs.user_id = $1::bigint AND c.active = true
+    WHERE rs.user_id = $1 AND c.active = true
     ORDER BY rs.ease_factor
   `;
 

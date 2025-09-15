@@ -2,19 +2,19 @@ import { getPool } from './client.js';
 import type { PoolClient } from 'pg';
 
 export interface WhitelistUser {
-  user_id: string;
+  user_id: number;
   username: string | null;
   role: string;
   added_at: Date;
-  added_by: string | null;
+  added_by: number | null;
   note: string | null;
 }
 
 export interface UpsertWhitelistUser {
-  user_id: string;
+  user_id: number;
   username?: string | null;
   role?: string;
-  added_by?: string | null;
+  added_by?: number | null;
   note?: string | null;
 }
 
@@ -42,7 +42,7 @@ export async function upsertWhitelistUser(
 }
 
 export async function removeWhitelistUser(
-  user_id: string,
+  user_id: number,
   client?: PoolClient,
 ): Promise<void> {
   const pool = client || getPool();

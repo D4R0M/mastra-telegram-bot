@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+const TEST_USER_ID = 12345;
+
 vi.mock('../src/db/cards.ts', () => ({
   createCard: vi.fn(async (data) => ({ id: '1', ...data })),
   getCardsByOwner: vi.fn(),
@@ -24,7 +26,7 @@ describe('import/export CSV tools', () => {
     const csv = 'Front,Back,Tags,Example\r\n"hello","world","greeting","hi, there"\r\n';
     const result = await importCSVTool.execute({
       context: {
-        owner_id: 'user1',
+        owner_id: TEST_USER_ID,
         csv_data: csv,
         has_headers: true,
         default_lang_front: '',
@@ -42,7 +44,7 @@ describe('import/export CSV tools', () => {
     vi.mocked(getCardsByOwner).mockResolvedValue([
       {
         id: '1',
-        owner_id: 'user1',
+        owner_id: TEST_USER_ID,
         front: 'hello',
         back: 'world',
         tags: ['greeting'],
@@ -57,7 +59,7 @@ describe('import/export CSV tools', () => {
 
     const result = await exportCSVTool.execute({
       context: {
-        owner_id: 'user1',
+        owner_id: TEST_USER_ID,
         include_inactive: false,
         limit: 1000,
       },
@@ -75,7 +77,7 @@ describe('import/export CSV tools', () => {
       {
         card: {
           id: '1',
-          owner_id: 'user1',
+          owner_id: TEST_USER_ID,
           front: 'due',
           back: 'card',
           tags: [],
@@ -92,7 +94,7 @@ describe('import/export CSV tools', () => {
 
     const result = await exportCSVTool.execute({
       context: {
-        owner_id: 'user1',
+        owner_id: TEST_USER_ID,
         include_inactive: false,
         limit: 1000,
         due_only: true,

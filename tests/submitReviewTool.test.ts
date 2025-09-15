@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHash } from 'crypto';
 
+const TEST_USER_ID = 12345;
+
 vi.mock('../src/db/reviews.ts', () => ({
   getReviewState: vi.fn(async () => ({
     interval_days: 0,
@@ -9,7 +11,7 @@ vi.mock('../src/db/reviews.ts', () => ({
     due_date: '2024-01-01',
     lapses: 0,
     last_reviewed_at: null,
-    user_id: 'user1',
+    user_id: TEST_USER_ID,
   })),
   updateReviewState: vi.fn(),
   createReviewLog: vi.fn(),
@@ -50,7 +52,7 @@ describe('submitReviewTool', () => {
     const start = String(Date.now() - 5000);
     const result = await submitReviewTool.execute({
       context: {
-        owner_id: 'user1',
+        owner_id: TEST_USER_ID,
         card_id: 'c1',
         grade: 5,
         start_time: start,
@@ -62,7 +64,7 @@ describe('submitReviewTool', () => {
     expect(result.success).toBe(true);
     expect(logReview).toHaveBeenCalled();
     const event = vi.mocked(logReview).mock.calls[0][0];
-    expect(event.user_id).toBe('user1');
+    expect(event.user_id).toBe(TEST_USER_ID);
     expect(event.ts_shown).toBeInstanceOf(Date);
     expect(isNaN(event.ts_shown.getTime())).toBe(false);
     expect(event.scheduled_at).toBeInstanceOf(Date);
@@ -70,8 +72,8 @@ describe('submitReviewTool', () => {
 
     expect(logReviewEvent).toHaveBeenCalled();
     const logEvent = vi.mocked(logReviewEvent).mock.calls[0][0];
-    const expectedHash = createHash('sha256').update('user1').digest('hex');
-    expect(logEvent.user_id).toBe('user1');
+    const expectedHash = createHash('sha256').update(TEST_USER_ID.toString()).digest('hex');
+    expect(logEvent.user_id).toBe(TEST_USER_ID);
     const expectedLatency =
       event.ts_answered.getTime() - event.ts_shown.getTime();
     expect(logEvent.user_hash).toBe(expectedHash);

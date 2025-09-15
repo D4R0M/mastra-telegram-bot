@@ -34,7 +34,7 @@ export const getDueCardsTool = createTool({
   id: "get-due-cards-tool",
   description: `Get vocabulary cards that are due for review today, ordered by priority (oldest due date first).`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID who owns the cards"),
+    owner_id: z.coerce.number().describe("User ID who owns the cards"),
     limit: z
       .number()
       .default(10)
@@ -190,7 +190,7 @@ export const startReviewTool = createTool({
   id: "start-review-tool",
   description: `Start reviewing a specific card by showing the front side. This begins the active recall process and starts timing.`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID who owns the card"),
+    owner_id: z.coerce.number().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card to review"),
     session_id: z
       .string()
@@ -290,7 +290,7 @@ export const submitReviewTool = createTool({
   id: "submit-review-tool",
   description: `Submit a review grade (0-5) for a card and update the SM-2 spaced repetition schedule. Shows the correct answer after grading.`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID who owns the card"),
+    owner_id: z.coerce.number().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card being reviewed"),
     grade: z
       .number()
@@ -462,7 +462,7 @@ export const submitReviewTool = createTool({
 
       // Update review state and log in a single transaction
       const userHash = createHash("sha256")
-        .update(context.owner_id)
+        .update(context.owner_id.toString())
         .digest("hex");
 
       const updateData: UpdateReviewStateData = {

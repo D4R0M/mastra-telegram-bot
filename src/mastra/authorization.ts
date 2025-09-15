@@ -12,6 +12,14 @@ let seeded = false;
 let useDb = true;
 const memoryWhitelist = new Map<string, { role: string }>();
 
+function parseNumericId(id: string | number): number | null {
+  if (typeof id === "number") {
+    return Number.isNaN(id) ? null : id;
+  }
+  const parsed = Number(id);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function invalidate() {
   cache.del("whitelist");
 }
@@ -45,15 +53,20 @@ async function seedAdmins() {
     .map((s) => s.trim())
     .filter(Boolean);
   for (const id of ids) {
+    const idStr = String(id);
     if (useDb) {
       try {
-        await upsertWhitelistUser({ user_id: id, role: "admin" });
+        const numericId = parseNumericId(id);
+        if (numericId === null) {
+          throw new Error("Invalid admin id");
+        }
+        await upsertWhitelistUser({ user_id: numericId, role: "admin" });
       } catch {
         useDb = false;
-        memoryWhitelist.set(id, { role: "admin" });
+        memoryWhitelist.set(idStr, { role: "admin" });
       }
     } else {
-      memoryWhitelist.set(id, { role: "admin" });
+      memoryWhitelist.set(idStr, { role: "admin" });
     }
   }
   invalidate();
@@ -81,68 +94,89 @@ export async function isAuthorizedTelegramUser(
 }
 
 export async function allowUser(
-  userId: string,
+  userId: string | number,
   username: string | null,
   note: string | undefined,
-  addedBy: string,
+  addedBy: string | number,
 ): Promise<void> {
+  const userIdStr = String(userId);
   if (useDb) {
     try {
+      const numericUserId = parseNumericId(userId);
+      const numericAddedBy = parseNumericId(addedBy);
+      if (numericUserId === null) {
+        throw new Error("Invalid user id");
+      }
       await upsertWhitelistUser({
-        user_id: userId,
+        user_id: numericUserId,
         username,
         note,
-        added_by: addedBy,
+        added_by: numericAddedBy ?? null,
       });
     } catch {
       useDb = false;
-      memoryWhitelist.set(userId, { role: "user" });
+      memoryWhitelist.set(userIdStr, { role: "user" });
     }
   } else {
-    memoryWhitelist.set(userId, { role: "user" });
+    memoryWhitelist.set(userIdStr, { role: "user" });
   }
   invalidate();
 }
 
-export async function denyUser(userId: string): Promise<void> {
+export async function denyUser(userId: string | number): Promise<void> {
+  const userIdStr = String(userId);
   if (useDb) {
     try {
-      await removeWhitelistUser(userId);
+      const numericUserId = parseNumericId(userId);
+      if (numericUserId === null) {
+        throw new Error("Invalid user id");
+      }
+      await removeWhitelistUser(numericUserId);
     } catch {
       useDb = false;
-      memoryWhitelist.delete(userId);
+      memoryWhitelist.delete(userIdStr);
     }
   } else {
-    memoryWhitelist.delete(userId);
+    memoryWhitelist.delete(userIdStr);
   }
   invalidate();
 }
 
-export async function promoteUser(userId: string): Promise<void> {
+export async function promoteUser(userId: string | number): Promise<void> {
+  const userIdStr = String(userId);
   if (useDb) {
     try {
-      await upsertWhitelistUser({ user_id: userId, role: "admin" });
+      const numericUserId = parseNumericId(userId);
+      if (numericUserId === null) {
+        throw new Error("Invalid user id");
+      }
+      await upsertWhitelistUser({ user_id: numericUserId, role: "admin" });
     } catch {
       useDb = false;
-      memoryWhitelist.set(userId, { role: "admin" });
+      memoryWhitelist.set(userIdStr, { role: "admin" });
     }
   } else {
-    memoryWhitelist.set(userId, { role: "admin" });
+    memoryWhitelist.set(userIdStr, { role: "admin" });
   }
   invalidate();
 }
 
-export async function demoteUser(userId: string): Promise<void> {
+export async function demoteUser(userId: string | number): Promise<void> {
+  const userIdStr = String(userId);
   if (useDb) {
     try {
-      await upsertWhitelistUser({ user_id: userId, role: "user" });
+      const numericUserId = parseNumericId(userId);
+      if (numericUserId === null) {
+        throw new Error("Invalid user id");
+      }
+      await upsertWhitelistUser({ user_id: numericUserId, role: "user" });
     } catch {
       useDb = false;
-      memoryWhitelist.set(userId, { role: "user" });
+      memoryWhitelist.set(userIdStr, { role: "user" });
     }
   } else {
-    if (memoryWhitelist.has(userId)) {
-      memoryWhitelist.set(userId, { role: "user" });
+    if (memoryWhitelist.has(userIdStr)) {
+      memoryWhitelist.set(userIdStr, { role: "user" });
     }
   }
   invalidate();
@@ -160,7 +194,7 @@ export async function listAllowed(
     }
   }
   const arr = Array.from(memoryWhitelist.keys()).map((id) => ({
-    user_id: id,
+    user_id: Number(id),
     username: null,
     role: memoryWhitelist.get(id)!.role,
     added_at: new Date(),
@@ -182,7 +216,7 @@ export async function exportAllowed(): Promise<
     }
   }
   return Array.from(memoryWhitelist.keys()).map((id) => ({
-    user_id: id,
+    user_id: Number(id),
     username: null,
     role: memoryWhitelist.get(id)!.role,
     added_at: new Date(),

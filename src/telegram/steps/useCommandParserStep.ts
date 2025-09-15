@@ -12,7 +12,7 @@ export const useCommandParserStep = createStep({
   inputSchema: z.object({
     message: z.string().describe("The user's message content"),
     threadId: z.string().describe("Unique thread identifier for conversation context"),
-    owner_id: z.string().describe("User ID for personalization and data access"),
+    owner_id: z.coerce.number().describe("User ID for personalization and data access"),
     chatId: z.string().describe("Telegram chat ID to pass through to next step"),
     messageId: z
       .string()
@@ -37,20 +37,23 @@ export const useCommandParserStep = createStep({
 
   execute: async ({ inputData, mastra }) => {
     const logger = mastra?.getLogger();
+    const ownerId = inputData.owner_id;
+    const ownerIdStr = ownerId.toString();
+
     logger?.info("🤖 [UseCommandParserStep] Starting command parser step", {
       message: inputData.message,
       threadId: inputData.threadId,
-      owner_id: inputData.owner_id,
+      owner_id: ownerId,
     });
 
     try {
       const { state: existingState, expired } = await getConversationState(
-        inputData.owner_id,
+        ownerIdStr,
       );
 
       const result = await processCommand(
         inputData.message,
-        inputData.owner_id,
+        ownerIdStr,
         inputData.chatId,
         existingState,
         mastra,
@@ -59,7 +62,7 @@ export const useCommandParserStep = createStep({
 
       if (result.conversationState !== existingState) {
         await saveConversationState(
-          inputData.owner_id,
+          ownerIdStr,
           result.conversationState,
         );
       }
@@ -77,7 +80,7 @@ export const useCommandParserStep = createStep({
       logger?.error("❌ [UseCommandParserStep] Error processing command:", {
         error: error instanceof Error ? error.message : String(error),
         threadId: inputData.threadId,
-        owner_id: inputData.owner_id,
+        owner_id: ownerId,
       });
 
       return {

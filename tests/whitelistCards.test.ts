@@ -5,10 +5,10 @@ vi.mock('../src/mastra/authorization.ts', () => ({
 }));
 import { whitelistMiddleware } from '../src/telegram/whitelistMiddleware.ts';
 
-const TEST_TG_ID = '6776842238';
+const TEST_TG_ID = 6776842238;
 
 vi.mock('../src/db/cards.ts', () => ({
-  getCardsByOwner: vi.fn(async (owner_id: string) => {
+  getCardsByOwner: vi.fn(async (owner_id: number) => {
     if (owner_id === TEST_TG_ID) {
       return [
         {

@@ -3,7 +3,7 @@ import type { PoolClient } from 'pg';
 
 export interface Card {
   id: string;
-  owner_id: string;
+  owner_id: number;
   front: string;
   back: string;
   tags: string[];
@@ -16,7 +16,7 @@ export interface Card {
 }
 
 export interface CreateCardData {
-  owner_id: string;
+  owner_id: number;
   front: string;
   back: string;
   tags?: string[];
@@ -40,7 +40,7 @@ export async function createCard(data: CreateCardData, client?: PoolClient): Pro
   
   const result = await pool.query(`
     INSERT INTO cards (owner_id, front, back, tags, example, lang_front, lang_back)
-    VALUES ($1::bigint, $2, $3, $4, $5, $6, $7)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *
   `, [
     data.owner_id,
@@ -55,19 +55,19 @@ export async function createCard(data: CreateCardData, client?: PoolClient): Pro
   return result.rows[0];
 }
 
-export async function getCardById(id: string, owner_id: string, client?: PoolClient): Promise<Card | null> {
+export async function getCardById(id: string, owner_id: number, client?: PoolClient): Promise<Card | null> {
   const pool = client || getPool();
   
   const result = await pool.query(`
     SELECT * FROM cards
-    WHERE id = $1 AND owner_id = $2::bigint AND active = true
+    WHERE id = $1 AND owner_id = $2 AND active = true
   `, [id, owner_id]);
   
   return result.rows[0] || null;
 }
 
 export async function getCardsByOwner(
-  owner_id: string, 
+  owner_id: number,
   options: {
     limit?: number;
     offset?: number;
@@ -80,7 +80,7 @@ export async function getCardsByOwner(
   
   let query = `
     SELECT * FROM cards
-    WHERE owner_id = $1::bigint
+    WHERE owner_id = $1
   `;
   const params: any[] = [owner_id];
   let paramIndex = 2;
@@ -114,7 +114,7 @@ export async function getCardsByOwner(
   return result.rows;
 }
 
-export async function updateCard(id: string, owner_id: string, data: UpdateCardData, client?: PoolClient): Promise<Card | null> {
+export async function updateCard(id: string, owner_id: number, data: UpdateCardData, client?: PoolClient): Promise<Card | null> {
   const pool = client || getPool();
   
   const setClause = [];
@@ -170,7 +170,7 @@ export async function updateCard(id: string, owner_id: string, data: UpdateCardD
   const query = `
     UPDATE cards 
     SET ${setClause.join(', ')}
-    WHERE id = $1 AND owner_id = $2::bigint AND active = true
+    WHERE id = $1 AND owner_id = $2 AND active = true
     RETURNING *
   `;
   
@@ -178,22 +178,22 @@ export async function updateCard(id: string, owner_id: string, data: UpdateCardD
   return result.rows[0] || null;
 }
 
-export async function deleteCard(id: string, owner_id: string, client?: PoolClient): Promise<boolean> {
+export async function deleteCard(id: string, owner_id: number, client?: PoolClient): Promise<boolean> {
   const pool = client || getPool();
   
   const result = await pool.query(`
     UPDATE cards 
     SET active = false
-    WHERE id = $1 AND owner_id = $2::bigint
+    WHERE id = $1 AND owner_id = $2
   `, [id, owner_id]);
   
   return (result.rowCount || 0) > 0;
 }
 
-export async function countCards(owner_id: string, options: { active?: boolean; tags?: string[] } = {}, client?: PoolClient): Promise<number> {
+export async function countCards(owner_id: number, options: { active?: boolean; tags?: string[] } = {}, client?: PoolClient): Promise<number> {
   const pool = client || getPool();
   
-  let query = `SELECT COUNT(*) FROM cards WHERE owner_id = $1::bigint`;
+  let query = `SELECT COUNT(*) FROM cards WHERE owner_id = $1`;
   const params: any[] = [owner_id];
   let paramIndex = 2;
   
