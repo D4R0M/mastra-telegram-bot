@@ -18,7 +18,7 @@ describe("export command", () => {
       message: 'ok',
     });
 
-    const res = await handleExportCommand([], '', 'user1');
+    const res = await handleExportCommand([], '', 12345);
     expect(res.response).toContain('CSV Export Ready');
     expect(res.inline_keyboard).toBeTruthy();
     expect(res.conversationState?.data?.csv).toContain('Front');

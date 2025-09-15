@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 
 export interface ReviewState {
   card_id: string;
-  user_id: string;
+  user_id: number;
   interval_days: number;
   repetitions: number;
   ease_factor: number;
@@ -18,7 +18,7 @@ export interface ReviewState {
 export interface ReviewLog {
   id: string;
   card_id: string;
-  user_id: string;
+  user_id: number;
   reviewed_at: Date;
   grade: number;
   prev_ease?: number;
@@ -36,7 +36,7 @@ export interface ReviewLog {
 
 export interface CreateReviewStateData {
   card_id: string;
-  user_id: string;
+  user_id: number;
   interval_days?: number;
   repetitions?: number;
   ease_factor?: number;
@@ -59,7 +59,7 @@ export interface UpdateReviewStateData {
 
 export interface CreateReviewLogData {
   card_id: string;
-  user_id: string;
+  user_id: number;
   grade: number;
   prev_ease?: number;
   new_ease?: number;
@@ -221,7 +221,7 @@ export async function updateReviewState(
 }
 
 export async function getDueCards(
-  user_id: string,
+  user_id: number,
   limit?: number,
   client?: PoolClient,
 ): Promise<Array<{ card: any; review_state: ReviewState }>> {
@@ -233,17 +233,17 @@ export async function getDueCards(
     SELECT c.*, rs.*
     FROM review_state rs
     INNER JOIN cards c ON c.id = rs.card_id
-    WHERE rs.user_id = $1::bigint
+    WHERE rs.user_id = $1
       AND c.active = true
       AND rs.due_date <= $2
     ORDER BY rs.due_date ASC, c.created_at ASC
   `;
 
-  const params = [user_id, today];
+  const params: (number | string)[] = [user_id, today];
 
   if (limit) {
     query += ` LIMIT $3`;
-    params.push(limit.toString());
+    params.push(limit);
   }
 
   const result = await pool.query(query, params);
@@ -318,7 +318,7 @@ export async function createReviewLog(
 }
 
 export async function getReviewStats(
-  user_id: string,
+  user_id: number,
   client?: PoolClient,
 ): Promise<{
   total_cards: number;
@@ -342,7 +342,7 @@ export async function getReviewStats(
       COUNT(CASE WHEN rs.queue = 'review' THEN 1 END) as review_cards
     FROM review_state rs
     JOIN cards c ON rs.card_id = c.id
-    WHERE rs.user_id = $1::bigint AND c.active = true
+    WHERE rs.user_id = $1 AND c.active = true
   `,
     [user_id, today],
   );
@@ -351,7 +351,7 @@ export async function getReviewStats(
     `
     SELECT COUNT(*) as reviewed_today
     FROM review_log rl
-    WHERE rl.user_id = $1::bigint
+    WHERE rl.user_id = $1
       AND rl.reviewed_at >= $2::date
       AND rl.reviewed_at < ($2::date + interval '1 day')
   `,
@@ -373,7 +373,7 @@ export async function getReviewStats(
 
 export interface ReviewEvent {
   card_id: string;
-  user_id: string;
+  user_id: number;
   ts_shown: Date;
   ts_answered: Date;
   grade: number;
@@ -455,7 +455,7 @@ export async function logReview(
 }
 
 export interface ReviewEventLog {
-  user_id: string;
+  user_id: number;
   user_hash: string;
   session_id?: string;
   card_id?: string;

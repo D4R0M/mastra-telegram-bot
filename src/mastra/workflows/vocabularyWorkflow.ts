@@ -168,7 +168,7 @@ export const vocabularyWorkflow = createWorkflow({
       .string()
       .describe("Unique thread identifier for conversation context"),
     owner_id: z
-      .string()
+      .coerce.number()
       .describe("User ID for personalization and data access"),
     chatId: z.string().describe("Telegram chat ID to send the response to"),
     messageId: z

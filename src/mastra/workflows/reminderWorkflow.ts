@@ -18,7 +18,7 @@ const fetchReminderUsersStep = createStep({
   outputSchema: z.object({
     users: z.array(
       z.object({
-        user_id: z.string(),
+        user_id: z.number(),
         chat_id: z.string(),
       }),
     ),
@@ -35,8 +35,8 @@ const fetchReminderUsersStep = createStep({
 
       return {
         users: result.rows.map((r: any) => ({
-          user_id: r.user_id as string,
-          chat_id: r.chat_id as string,
+          user_id: Number(r.user_id),
+          chat_id: String(r.chat_id),
         })),
       };
     } catch (error) {
@@ -56,7 +56,7 @@ const processRemindersStep = createStep({
   inputSchema: z.object({
     users: z.array(
       z.object({
-        user_id: z.string(),
+        user_id: z.number(),
         chat_id: z.string(),
       }),
     ),

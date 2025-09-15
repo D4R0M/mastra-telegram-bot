@@ -2,7 +2,7 @@ import { getPool } from './client.js';
 import type { PoolClient } from 'pg';
 
 export interface UserPrefs {
-  user_id: string;
+  user_id: number;
   chat_id: string;
   timezone: string;
   dnd_start?: string; // HH:MM format
@@ -19,7 +19,7 @@ export interface UserPrefs {
 }
 
 export interface CreatePrefsData {
-  user_id: string;
+  user_id: number;
   chat_id: string;
   timezone?: string;
   dnd_start?: string;
@@ -87,7 +87,7 @@ export async function createUserPrefs(data: CreatePrefsData, client?: PoolClient
   return result.rows[0];
 }
 
-export async function getUserPrefs(user_id: string, client?: PoolClient): Promise<UserPrefs | null> {
+export async function getUserPrefs(user_id: number, client?: PoolClient): Promise<UserPrefs | null> {
   const pool = client || getPool();
   
   const result = await pool.query(`
@@ -107,7 +107,7 @@ export async function getUserPrefsByChatId(chat_id: string, client?: PoolClient)
   return result.rows[0] || null;
 }
 
-export async function updateUserPrefs(user_id: string, data: UpdatePrefsData, client?: PoolClient): Promise<UserPrefs | null> {
+export async function updateUserPrefs(user_id: number, data: UpdatePrefsData, client?: PoolClient): Promise<UserPrefs | null> {
   const pool = client || getPool();
   
   const setClause = [];
@@ -189,7 +189,7 @@ export async function updateUserPrefs(user_id: string, data: UpdatePrefsData, cl
   return result.rows[0] || null;
 }
 
-export async function deleteUserPrefs(user_id: string, client?: PoolClient): Promise<boolean> {
+export async function deleteUserPrefs(user_id: number, client?: PoolClient): Promise<boolean> {
   const pool = client || getPool();
   
   const result = await pool.query(`

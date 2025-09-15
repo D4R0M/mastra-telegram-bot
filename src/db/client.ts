@@ -1,4 +1,7 @@
-import { Pool, PoolClient } from 'pg';
+import { Pool, PoolClient, types } from 'pg';
+
+// Ensure BIGINT values are parsed into native numbers for consistency
+types.setTypeParser(20, (value) => (value === null ? null : parseInt(value, 10)));
 
 let pool: Pool | null = null;
 
