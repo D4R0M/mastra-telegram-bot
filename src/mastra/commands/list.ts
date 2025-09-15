@@ -14,20 +14,39 @@ export default async function handleListCommand(
 
   try {
     // Parse pagination and sorting
-    const limit = params.length > 0 ? parseInt(params[0]) : 20;
-    const offset = state?.data?.offset ?? 0;
-    const sort = state?.data?.sort ?? "date";
+    const parsedLimit = params.length > 0 ? parseInt(params[0]) : NaN;
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 20;
+    const stateData = state?.data ?? {};
+    const offset = typeof stateData.offset === "number" && stateData.offset >= 0
+      ? stateData.offset
+      : 0;
+    const sort = typeof stateData.sort === "string" && stateData.sort.length > 0
+      ? stateData.sort
+      : "date";
+    const tagsFilter: string[] | undefined = Array.isArray(stateData.tags)
+      ? stateData.tags.filter((tag: unknown) => typeof tag === "string" && tag.trim().length > 0)
+      : undefined;
+    const searchTerm = typeof stateData.search === "string" && stateData.search.trim().length > 0
+      ? stateData.search.trim()
+      : undefined;
 
     const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
       requestId: userId,
     });
+    const toolContext: Record<string, unknown> = {
+      owner_id: userId,
+      limit,
+      offset,
+      active_only: true,
+    };
+    if (tagsFilter && tagsFilter.length > 0) {
+      toolContext.tags = tagsFilter.join(",");
+    }
+    if (searchTerm) {
+      toolContext.search = searchTerm;
+    }
     const result = await listCardsTool.execute({
-      context: {
-        owner_id: userId,
-        limit: isNaN(limit) ? 20 : limit,
-        offset,
-        active_only: true,
-      },
+      context: toolContext,
       runtimeContext,
       tracingContext,
       mastra,
@@ -50,6 +69,13 @@ export default async function handleListCommand(
         )
         .join("\n\n");
 
+      const filterNotice = tagsFilter && tagsFilter.length > 0
+        ? `\n🏷 <i>Filter: ${tagsFilter.join(", ")}</i>`
+        : "";
+      const filterPayload = tagsFilter && tagsFilter.length > 0
+        ? `:tags=${encodeURIComponent(tagsFilter.join(","))}`
+        : "";
+
       const keyboardRows: any[] = cards.map((card: any) => [
         {
           text: "Manage",
@@ -63,7 +89,7 @@ export default async function handleListCommand(
       if (currentPage > 1) {
         paginationRow.push({
           text: "◀ Prev",
-          callback_data: `list:page:${offset - limit}:${sort}`,
+          callback_data: `list:page:${offset - limit}:${sort}${filterPayload}`,
         });
       }
       paginationRow.push({
@@ -73,7 +99,7 @@ export default async function handleListCommand(
       if (currentPage < totalPages) {
         paginationRow.push({
           text: "Next ▶",
-          callback_data: `list:page:${offset + limit}:${sort}`,
+          callback_data: `list:page:${offset + limit}:${sort}${filterPayload}`,
         });
       }
       if (paginationRow.length) {
@@ -81,27 +107,58 @@ export default async function handleListCommand(
       }
 
       keyboardRows.push([
-        { text: "📅 Date", callback_data: `list:sort:date:${offset}` },
-        { text: "🔠 Alphabetical", callback_data: `list:sort:alpha:${offset}` },
+        { text: "📅 Date", callback_data: `list:sort:date:${offset}${filterPayload}` },
+        {
+          text: "🔠 Alphabetical",
+          callback_data: `list:sort:alpha:${offset}${filterPayload}`,
+        },
         {
           text: "🔥 Review Count",
-          callback_data: `list:sort:review:${offset}`,
+          callback_data: `list:sort:review:${offset}${filterPayload}`,
         },
       ]);
 
-      keyboardRows.push([
-        { text: "📂 By Tag", callback_data: "list:filter_tag" },
-        { text: "🔍 Search", callback_data: "list:filter_search" },
-      ]);
+      if (tagsFilter && tagsFilter.length > 0) {
+        keyboardRows.push([
+          {
+            text: "📂 Change Tag Filter",
+            callback_data: `list:filter_tag:${sort}${filterPayload}`,
+          },
+          { text: "🚫 Clear Filter", callback_data: `list:clear_filter:${sort}` },
+        ]);
+      } else {
+        keyboardRows.push([
+          { text: "📂 By Tag", callback_data: "list:filter_tag" },
+          { text: "🔍 Search", callback_data: "list:filter_search" },
+        ]);
+      }
 
       const inline_keyboard = { inline_keyboard: keyboardRows };
 
       return {
-        response: `📚 <b>Your Vocabulary Cards (${result.total_found} total)</b>\n\n${cardsList}`,
+        response: `📚 <b>Your Vocabulary Cards (${result.total_found} total)</b>${filterNotice}\n\n${cardsList}`,
         parse_mode: "HTML",
         inline_keyboard,
       };
     } else if (result.cards && result.cards.length === 0) {
+      if (tagsFilter && tagsFilter.length > 0) {
+        const inline_keyboard = {
+          inline_keyboard: [
+            [
+              {
+                text: "📂 Change Tag Filter",
+                callback_data: `list:filter_tag:${sort}${filterPayload || ""}`,
+              },
+            ],
+            [{ text: "🚫 Clear Filter", callback_data: `list:clear_filter:${sort}` }],
+          ],
+        };
+        return {
+          response: `📭 No cards found with tags <b>${tagsFilter.join(", ")}</b>.\n\nTry a different tag or clear the filter to see all cards.`,
+          parse_mode: "HTML",
+          inline_keyboard,
+        };
+      }
       return {
         response:
           "📭 You don't have any cards yet.\n\nUse <code>/add</code> to create your first card!",

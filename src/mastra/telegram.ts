@@ -61,7 +61,7 @@ export async function processTelegramUpdate(
     update?.callback_query?.message?.chat?.type ||
     update?.channel_post?.chat?.type;
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (chatType !== "private") {
+  if (chatType && chatType !== "private") {
     if (token && chatId) {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
@@ -170,7 +170,6 @@ export async function processTelegramUpdate(
           existingState,
           mastra,
           expired,
-          username,
         );
         commandHandled = `callback_grade_${grade}`;
       } else if (data.startsWith("invite:")) {
