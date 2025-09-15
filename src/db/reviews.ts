@@ -225,7 +225,7 @@ export async function getDueCards(
     SELECT c.*, rs.*
     FROM cards c
     INNER JOIN review_state rs ON c.id = rs.card_id
-    WHERE c.owner_id = $1 
+    WHERE c.owner_id = $1::bigint
       AND c.active = true 
       AND rs.due_date <= $2
     ORDER BY rs.due_date ASC, c.created_at ASC
@@ -330,7 +330,7 @@ export async function getReviewStats(
       COUNT(CASE WHEN rs.queue = 'review' THEN 1 END) as review_cards
     FROM cards c
     LEFT JOIN review_state rs ON c.id = rs.card_id
-    WHERE c.owner_id = $1 AND c.active = true
+    WHERE c.owner_id = $1::bigint AND c.active = true
   `,
     [owner_id, today],
   );
@@ -340,7 +340,7 @@ export async function getReviewStats(
     SELECT COUNT(*) as reviewed_today
     FROM review_log rl
     INNER JOIN cards c ON rl.card_id = c.id
-    WHERE c.owner_id = $1 
+    WHERE c.owner_id = $1::bigint
       AND rl.reviewed_at >= $2::date
       AND rl.reviewed_at < ($2::date + interval '1 day')
   `,
