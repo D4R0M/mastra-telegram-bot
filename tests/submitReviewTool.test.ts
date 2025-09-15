@@ -69,16 +69,23 @@ describe('submitReviewTool', () => {
     expect(logReviewEvent).toHaveBeenCalled();
     const logEvent = vi.mocked(logReviewEvent).mock.calls[0][0];
     const expectedHash = createHash('sha256').update('user1').digest('hex');
-    expect(logEvent).toMatchObject({
-      user_hash: expectedHash,
-      session_id: 's1',
-      grade: 5,
-      prev_ease: 2.5,
-      new_ease: 2.6,
-      prev_interval_days: 0,
-      new_interval_days: 1,
-      prev_repetitions: 0,
-      new_repetitions: 1,
-    });
+    const expectedLatency =
+      event.ts_answered.getTime() - event.ts_shown.getTime();
+    expect(logEvent.user_hash).toBe(expectedHash);
+    expect(logEvent.grade).toBe(5);
+    expect(logEvent.session_id).toBe('s1');
+    expect(logEvent.latency_ms).toBe(expectedLatency);
+    expect(logEvent.was_overdue).toBe(true);
+    expect(logEvent.prev_ease).toBe(2.5);
+    expect(logEvent.new_ease).toBe(2.6);
+    expect(logEvent.prev_interval_days).toBe(0);
+    expect(logEvent.new_interval_days).toBe(1);
+    expect(logEvent.prev_repetitions).toBe(0);
+    expect(logEvent.new_repetitions).toBe(1);
+    expect(logEvent.prev_ease).not.toBe(logEvent.new_ease);
+    expect(logEvent.prev_interval_days).not.toBe(
+      logEvent.new_interval_days,
+    );
+    expect(logEvent.prev_repetitions).not.toBe(logEvent.new_repetitions);
   });
 });
