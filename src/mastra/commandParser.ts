@@ -32,6 +32,7 @@ const ADMIN_COMMANDS = new Set([
   "/promote",
   "/demote",
   "/adminhelp",
+  "/check_ml_log",
 ]);
 
 // ===============================
