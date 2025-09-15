@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createHash } from 'crypto';
 
 vi.mock('../src/db/reviews.ts', () => ({
   getReviewState: vi.fn(async () => ({
@@ -12,6 +13,7 @@ vi.mock('../src/db/reviews.ts', () => ({
   updateReviewState: vi.fn(),
   createReviewLog: vi.fn(),
   logReview: vi.fn(),
+  logReviewEvent: vi.fn(),
 }));
 
 vi.mock('../src/db/cards.ts', () => ({
@@ -40,7 +42,7 @@ vi.mock('../src/db/client.ts', () => ({
 }));
 
 import { submitReviewTool } from '../src/mastra/tools/reviewTools.ts';
-import { logReview } from '../src/db/reviews.ts';
+import { logReview, logReviewEvent } from '../src/db/reviews.ts';
 
 describe('submitReviewTool', () => {
   it('handles string start_time by converting to valid timestamp', async () => {
@@ -63,5 +65,20 @@ describe('submitReviewTool', () => {
     expect(isNaN(event.ts_shown.getTime())).toBe(false);
     expect(event.scheduled_at).toBeInstanceOf(Date);
     expect(isNaN(event.scheduled_at.getTime())).toBe(false);
+
+    expect(logReviewEvent).toHaveBeenCalled();
+    const logEvent = vi.mocked(logReviewEvent).mock.calls[0][0];
+    const expectedHash = createHash('sha256').update('user1').digest('hex');
+    expect(logEvent).toMatchObject({
+      user_hash: expectedHash,
+      session_id: 's1',
+      grade: 5,
+      prev_ease: 2.5,
+      new_ease: 2.6,
+      prev_interval_days: 0,
+      new_interval_days: 1,
+      prev_repetitions: 0,
+      new_repetitions: 1,
+    });
   });
 });
