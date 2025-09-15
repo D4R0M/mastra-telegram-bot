@@ -1,10 +1,12 @@
 import { inngest } from "../../mastra/inngest/client.js";
+import { onSchedule } from "../onSchedule.js";
 import { getPool } from "../../db/client.js";
 import { isAuthorizedTelegramUser } from "../../mastra/authorization.js";
 import { sendTelegramMessage } from "../../telegram/sendMessage.js";
 
-export const checkDue = inngest.onSchedule(
-  "schedule.check-due",
+export const checkDue = onSchedule(
+  inngest,
+  "check-due",
   "*/2 * * * *",
   async ({ step }) => {
     const pool = getPool();
