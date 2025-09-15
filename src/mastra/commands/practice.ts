@@ -55,10 +55,12 @@ async function startInlinePractice(
       tracingContext: startTracingContext,
     } = buildToolExecCtx(mastra, { requestId: userId });
     const sessionId = `session_${userId}_${Date.now()}`;
+    const firstCard = dueResult.cards[0];
+    const cardId = firstCard.card_id;
     const startResult = await startReviewTool.execute({
       context: {
         owner_id: userId,
-        card_id: dueResult.cards[0].card_id,
+        card_id: cardId,
         session_id: sessionId,
       },
       runtimeContext: startRuntimeContext,
@@ -69,7 +71,7 @@ async function startInlinePractice(
     if (startResult.success && startResult.card) {
       const card = {
         ...startResult.card,
-        back: startResult.card.back ?? dueResult.cards[0].back,
+        back: startResult.card.back ?? firstCard.back,
       };
       const currentIndex = 1;
       const totalCards = dueResult.cards.length;
