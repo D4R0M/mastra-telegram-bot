@@ -461,8 +461,11 @@ export const submitReviewTool = createTool({
       }
 
       // Update review state and log in a single transaction
+      const botIdPrefix = process.env.TELEGRAM_BOT_TOKEN
+        ? process.env.TELEGRAM_BOT_TOKEN.split(":")[0]
+        : "bot";
       const userHash = createHash("sha256")
-        .update(context.owner_id.toString())
+        .update(`${botIdPrefix}:${context.owner_id}`)
         .digest("hex");
 
       const updateData: UpdateReviewStateData = {

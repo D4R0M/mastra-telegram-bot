@@ -140,6 +140,17 @@ export async function processTelegramUpdate(
           username,
         );
         commandHandled = "callback_practice_now";
+      } else if (data === "practice_inline") {
+        result = await processCommand(
+          "/practice inline",
+          userIdStr,
+          chatId,
+          existingState,
+          mastra,
+          expired,
+          username,
+        );
+        commandHandled = "callback_practice_inline";
       } else if (data === "add_card") {
         result = await processCommand(
           "/add",
