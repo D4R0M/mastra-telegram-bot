@@ -138,6 +138,7 @@ export async function processTelegramUpdate(
           mastra,
           expired,
           username,
+          { chatType },
         );
         commandHandled = "callback_practice_now";
       } else if (data === "practice_inline") {
@@ -149,6 +150,7 @@ export async function processTelegramUpdate(
           mastra,
           expired,
           username,
+          { chatType },
         );
         commandHandled = "callback_practice_inline";
       } else if (data === "add_card") {
@@ -160,6 +162,7 @@ export async function processTelegramUpdate(
           mastra,
           expired,
           username,
+          { chatType },
         );
         commandHandled = "callback_add_card";
       } else if (data === "open_stats_detail") {
@@ -181,6 +184,8 @@ export async function processTelegramUpdate(
           existingState,
           mastra,
           expired,
+          undefined,
+          { chatType },
         );
         commandHandled = `callback_grade_${grade}`;
       } else if (data.startsWith("invite:")) {
@@ -235,6 +240,7 @@ export async function processTelegramUpdate(
           mastra,
           expired,
           username,
+          { chatType },
         );
         const parsed = parseCommand(data);
         if (parsed?.command) {
@@ -274,6 +280,7 @@ export async function processTelegramUpdate(
         mastra,
         expired,
         username,
+        { chatType },
       );
       const parsed = parseCommand(text);
       if (parsed?.command) {

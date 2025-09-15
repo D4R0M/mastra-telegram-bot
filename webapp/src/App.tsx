@@ -108,11 +108,6 @@ export default function App() {
     const startedAt = startTime ?? Date.now();
 
     setSubmitting(true);
-    setSelectedQuality(null);
-    hideMainButton();
-    setShowAnswer(false);
-    setCard(null);
-    setLoading(true);
     setRemainingDue((prev) => Math.max(prev - 1, 0));
 
     try {
@@ -131,10 +126,10 @@ export default function App() {
       await loadNextCard(sessionRef.current);
       showToast("Recorded!", "success");
     } catch (err) {
+      setRemainingDue(previousRemaining);
       setCard(currentCard);
       setShowAnswer(true);
       setSelectedQuality(quality);
-      setRemainingDue(previousRemaining);
       const message = err instanceof Error ? err.message : "Submit failed";
       showToast(
         message.toLowerCase() === "unauthorized"
@@ -143,7 +138,6 @@ export default function App() {
         "error",
       );
     } finally {
-      setLoading(false);
       setSubmitting(false);
     }
   }, [card, selectedQuality, submitting, remainingDue, startTime, loadNextCard, showToast]);
@@ -170,7 +164,7 @@ export default function App() {
   }, [card, showAnswer, submitting]);
 
   useEffect(() => {
-    if (selectedQuality && !submitting) {
+    if (card && showAnswer && selectedQuality) {
       configureMainButton({
         text: `Submit – ${qualityLabel(selectedQuality)}`,
         onClick: handleSubmit,
@@ -179,7 +173,7 @@ export default function App() {
     } else {
       hideMainButton();
     }
-  }, [selectedQuality, submitting, handleSubmit]);
+  }, [card, showAnswer, selectedQuality, submitting, handleSubmit]);
 
   const handleReveal = useCallback(() => {
     if (!submitting) {

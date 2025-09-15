@@ -70,6 +70,13 @@ export function configureMainButton(options: {
     is_active: options.disabled ? false : true,
     is_visible: true,
   });
+  if (options.disabled) {
+    if (typeof button.showProgress === "function") {
+      button.showProgress(false);
+    }
+  } else if (typeof button.hideProgress === "function") {
+    button.hideProgress();
+  }
   button.show();
   button.onClick(options.onClick);
 }
@@ -81,6 +88,9 @@ export function hideMainButton() {
   if (mainButtonHandler) {
     button.offClick(mainButtonHandler);
     mainButtonHandler = null;
+  }
+  if (typeof button.hideProgress === "function") {
+    button.hideProgress();
   }
   button.hide();
 }

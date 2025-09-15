@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
 
 const TEST_USER_ID = 12345;
@@ -48,6 +48,10 @@ import { submitReviewTool } from '../src/mastra/tools/reviewTools.ts';
 import { logReview, logReviewEvent } from '../src/db/reviews.ts';
 
 describe('submitReviewTool', () => {
+  beforeEach(() => {
+    process.env.TELEGRAM_BOT_TOKEN = '999999:token';
+  });
+
   it('handles string start_time by converting to valid timestamp', async () => {
     const start = String(Date.now() - 5000);
     const result = await submitReviewTool.execute({
@@ -72,7 +76,9 @@ describe('submitReviewTool', () => {
 
     expect(logReviewEvent).toHaveBeenCalled();
     const logEvent = vi.mocked(logReviewEvent).mock.calls[0][0];
-    const expectedHash = createHash('sha256').update(TEST_USER_ID.toString()).digest('hex');
+    const expectedHash = createHash('sha256')
+      .update(`999999:${TEST_USER_ID}`)
+      .digest('hex');
     expect(logEvent.user_id).toBe(TEST_USER_ID);
     const expectedLatency =
       event.ts_answered.getTime() - event.ts_shown.getTime();

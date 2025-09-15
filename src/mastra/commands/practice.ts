@@ -1,4 +1,8 @@
-import type { ConversationState, CommandResponse } from "../commandTypes.js";
+import type {
+  ConversationState,
+  CommandResponse,
+  CommandContext,
+} from "../commandTypes.js";
 import { buildToolExecCtx } from "../context.js";
 import { getDueCardsTool, startReviewTool } from "../tools/reviewTools.js";
 
@@ -85,7 +89,6 @@ async function startInlinePractice(
           },
         },
         parse_mode: "HTML",
-        remove_keyboard: true,
       };
     }
 
@@ -108,6 +111,7 @@ export default async function handlePracticeCommand(
   userId: string,
   state?: ConversationState,
   mastra?: any,
+  commandContext?: CommandContext,
 ): Promise<CommandResponse> {
   const forceInline = params.some(
     (param) => typeof param === "string" && param.toLowerCase() === "inline",
@@ -115,8 +119,10 @@ export default async function handlePracticeCommand(
 
   const webAppUrl = buildWebAppUrl();
   const webAppEnabled = WEBAPP_ENABLED && !!webAppUrl;
+  const chatType = commandContext?.chatType;
+  const isPrivate = chatType ? chatType === "private" : true;
 
-  if (webAppEnabled && !forceInline) {
+  if (webAppEnabled && isPrivate && !forceInline) {
     return {
       response: [
         "🧠 <b>Practice in chat</b>",

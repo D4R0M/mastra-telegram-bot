@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { verifyInitData } from "../webappInit.js";
+import { requireTelegramWebAppAuth } from "../webappInit.js";
 import { buildToolExecCtx } from "../../mastra/context.js";
 import {
   getDueCardsTool,
@@ -15,8 +15,8 @@ type RateLimitBucket = {
   resetAt: number;
 };
 
-const SUBMIT_WINDOW_MS = 30_000;
-const SUBMIT_LIMIT = 12;
+const SUBMIT_WINDOW_MS = 60_000;
+const SUBMIT_LIMIT = 10;
 const submitBuckets = new Map<string, RateLimitBucket>();
 
 function takeRateLimitToken(key: string): boolean {
@@ -33,21 +33,6 @@ function takeRateLimitToken(key: string): boolean {
 
   bucket.count += 1;
   return true;
-}
-
-function resolveInitData(c: any) {
-  const initData =
-    c.req.header("x-telegram-init-data") ||
-    c.req.query("initData") ||
-    c.req.header("X-Telegram-Init-Data");
-
-  const verified = verifyInitData(initData);
-  const userId = verified.data.user?.id;
-  if (!userId) {
-    throw Object.assign(new Error("Missing user"), { status: 401 });
-  }
-
-  return { verified, userId };
 }
 
 function computeUserHash(botId: string | undefined, userId: number) {
@@ -108,14 +93,14 @@ async function fetchDueCount(
 }
 
 export function createPracticeNextHandler(mastra: any): Handler {
-  return async (c) => {
+  return requireTelegramWebAppAuth(async (c, auth) => {
     const logger = mastra?.getLogger?.();
-    try {
-      const { verified, userId } = resolveInitData(c);
-      const requestId = `${userId}`;
-      const sessionId =
-        c.req.query("sessionId") || `practice_${userId}_${Date.now()}`;
+    const userId = auth.tgUser.id;
+    const requestId = `${userId}`;
+    const sessionId =
+      c.req.query("sessionId") || `practice_${userId}_${Date.now()}`;
 
+    try {
       const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
         requestId,
         spanName: "practice_next",
@@ -192,32 +177,29 @@ export function createPracticeNextHandler(mastra: any): Handler {
           serverTime: Date.now(),
           user: {
             id: userId,
-            username: verified.data.user?.username,
-            firstName: verified.data.user?.first_name,
+            username: auth.tgUser.username,
+            firstName: auth.tgUser.first_name,
           },
         },
         200,
       );
     } catch (error) {
-      const status = (error as any)?.status || 401;
-      const message =
-        status === 401 ? "Invalid Telegram init data" : "Practice failed";
       logger?.warn("practice_next_error", {
-        status,
         error: error instanceof Error ? error.message : String(error),
       });
-      return c.json({ error: message }, status);
+      return c.json({ error: "Practice failed" }, 500);
     }
-  };
+  });
 }
 
 export function createPracticeSubmitHandler(mastra: any): Handler {
-  return async (c) => {
+  return requireTelegramWebAppAuth(async (c, auth) => {
     const logger = mastra?.getLogger?.();
     const receivedAt = Date.now();
+    const userId = auth.tgUser.id;
+    const userKey = String(userId);
+
     try {
-      const { verified, userId } = resolveInitData(c);
-      const userKey = String(userId);
       if (!takeRateLimitToken(userKey)) {
         return c.json({ error: "Too many submissions" }, 429);
       }
@@ -300,14 +282,14 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
         200,
       );
     } catch (error) {
-      const status = (error as any)?.status || 401;
-      const message =
-        status === 401 ? "Invalid Telegram init data" : "Submit failed";
       logger?.warn("practice_submit_error", {
-        status,
         error: error instanceof Error ? error.message : String(error),
       });
-      return c.json({ error: message }, status);
+      return c.json({ error: "Submit failed" }, 500);
     }
-  };
+  });
+}
+
+export function __resetPracticeRateLimit() {
+  submitBuckets.clear();
 }

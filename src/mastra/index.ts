@@ -142,10 +142,26 @@ const corsMiddleware = async (c: any, next: () => Promise<void>) => {
   const origin = c.req.header("origin");
   const allowed = isAllowedOrigin(origin);
 
+  const appendVaryOrigin = () => {
+    const current = c.res.headers.get("Vary");
+    if (!current) {
+      c.res.headers.set("Vary", "Origin");
+      return;
+    }
+    const values = current
+      .split(",")
+      .map((value: string) => value.trim().toLowerCase());
+    if (!values.includes("origin")) {
+      c.res.headers.set("Vary", `${current}, Origin`);
+    }
+  };
+
   if (c.req.method === "OPTIONS") {
     if (allowed && origin) {
       c.res.headers.set("Access-Control-Allow-Origin", origin);
-      c.res.headers.set("Vary", "Origin");
+    }
+    if (origin) {
+      appendVaryOrigin();
     }
     c.res.headers.set(
       "Access-Control-Allow-Headers",
@@ -160,8 +176,9 @@ const corsMiddleware = async (c: any, next: () => Promise<void>) => {
 
   if (allowed && origin) {
     c.res.headers.set("Access-Control-Allow-Origin", origin);
-    const vary = c.res.headers.get("Vary");
-    c.res.headers.set("Vary", vary ? `${vary}, Origin` : "Origin");
+  }
+  if (origin) {
+    appendVaryOrigin();
   }
 };
 
