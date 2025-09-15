@@ -11,7 +11,12 @@ import {
   getConversationState,
   saveConversationState,
 } from "./conversationStateStorage.js";
-import { isAuthorizedTelegramUser } from "./authorization.js";
+import {
+  isAuthorizedTelegramUser,
+  isAdmin,
+  allowUser,
+  finalizeInvite,
+} from "./authorization.js";
 
 export function resolveChatId(update: any): string | undefined {
   return (
@@ -23,6 +28,7 @@ export function resolveChatId(update: any): string | undefined {
 
 // Simple in-memory idempotency guard
 const seenUpdates = new Set<number>();
+const unauthorizedNotified = new Set<string>();
 
 export async function processTelegramUpdate(
   update: any,
@@ -46,38 +52,49 @@ export async function processTelegramUpdate(
     update?.channel_post?.from;
   const userId = from?.id;
   const username = from?.username;
-
-  if (!isAuthorizedTelegramUser(userId)) {
-    logger?.warn("unauthorized", { userId, username });
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatType =
+    update?.message?.chat?.type ||
+    update?.callback_query?.message?.chat?.type ||
+    update?.channel_post?.chat?.type;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (chatType !== "private") {
     if (token && chatId) {
-      try {
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: "Sorry, you are not authorized to use this bot.",
-          }),
-        });
-      } catch (err) {
-        logger?.error("process_error", {
-          update_id: updateId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: "This bot only works in DMs.",
+        }),
+      }).catch(() => {});
     }
     return;
   }
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !chatId) {
     logger?.error("missing_token_or_chat", { update_id: updateId });
     return;
   }
 
+  const userIdStr = String(userId);
+  const admin = await isAdmin(userIdStr);
+  if (!admin && !(await isAuthorizedTelegramUser(userIdStr))) {
+    logger?.warn("unauthorized", { userId, username });
+    if (!unauthorizedNotified.has(userIdStr)) {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: "This bot is private. Ask the admin for access.",
+        }),
+      }).catch(() => {});
+      unauthorizedNotified.add(userIdStr);
+    }
+    return;
+  }
+
   try {
-    const userIdStr = String(userId);
     const { state: existingState, expired } =
       await getConversationState(userIdStr);
     let result;
@@ -136,6 +153,49 @@ export async function processTelegramUpdate(
           expired,
         );
         commandHandled = `callback_grade_${grade}`;
+      } else if (data.startsWith("invite:")) {
+        const parts = data.split(":");
+        const code = parts[1];
+        const action = parts[2];
+        const entry = finalizeInvite(code);
+        if (entry && entry.adminId === userIdStr) {
+          if (action === "approve" && entry.userId) {
+            await allowUser(entry.userId, null, undefined, userIdStr);
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: entry.userId,
+                text: "You are approved.",
+              }),
+            }).catch(() => {});
+            result = {
+              response: "User approved",
+              edit_message_id: update.callback_query.message.message_id,
+            };
+          } else {
+            if (entry.userId) {
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: entry.userId,
+                  text: "Request denied.",
+                }),
+              }).catch(() => {});
+            }
+            result = {
+              response: "Request denied",
+              edit_message_id: update.callback_query.message.message_id,
+            };
+          }
+        } else {
+          result = {
+            response: "Invalid invite",
+            edit_message_id: update.callback_query.message.message_id,
+          };
+        }
+        commandHandled = `callback_invite_${action}`;
       } else {
         result = await processCommand(
           data,
@@ -163,7 +223,15 @@ export async function processTelegramUpdate(
         ).catch(() => {});
       }
     } else {
-      const text = update?.message?.text || update?.channel_post?.text || "";
+      let text = update?.message?.text || update?.channel_post?.text || "";
+      if (update?.message?.forward_from?.id) {
+        const fwdId = update.message.forward_from.id;
+        if (/^\/allow\b/.test(text) && text.trim().split(/\s+/).length < 2) {
+          text += ` ${fwdId}`;
+        } else if (/^\/deny\b/.test(text) && text.trim().split(/\s+/).length < 2) {
+          text += ` ${fwdId}`;
+        }
+      }
       result = await processCommand(
         text,
         userIdStr,

@@ -1,9 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 
 // Allow test user ID 123 to pass authorization checks
-process.env.ALLOWED_USER_IDS = "123";
-const { AUTHORIZED_TELEGRAM_USER_IDS } = await import("../src/mastra/authorization.ts");
-AUTHORIZED_TELEGRAM_USER_IDS.add("123");
+process.env.ADMIN_USER_IDS = "123";
+await import("../src/mastra/authorization.ts");
 
 vi.mock("../src/mastra/commandParser.ts", () => ({
   parseCommand: vi.fn(),
