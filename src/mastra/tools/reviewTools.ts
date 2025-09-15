@@ -9,10 +9,12 @@ import {
   getReviewState,
   getReviewStates,
   logReview,
+  logReviewEvent,
 } from "../../db/reviews.js";
 import { getCardById } from "../../db/cards.js";
 import { applySM2 } from "../../lib/sm2.js";
 import { withTransaction } from "../../db/client.js";
+import { createHash } from "crypto";
 import type {
   CreateReviewLogData,
   UpdateReviewStateData,
@@ -457,6 +459,10 @@ export const submitReviewTool = createTool({
       }
 
       // Update review state and log in a single transaction
+      const userHash = createHash("sha256")
+        .update(context.owner_id)
+        .digest("hex");
+
       const updateData: UpdateReviewStateData = {
         interval_days: nextIntervalDays,
         repetitions: nextReps,
@@ -484,6 +490,21 @@ export const submitReviewTool = createTool({
         direction: "front_to_back",
       };
 
+      const reviewEventLogData = {
+        user_hash: userHash,
+        session_id: context.session_id,
+        card_id: context.card_id,
+        grade: context.grade,
+        latency_ms: latencyMs,
+        was_overdue: wasOverdue,
+        prev_ease: currentReviewState.ease_factor,
+        new_ease: nextEase,
+        prev_interval_days: currentReviewState.interval_days,
+        new_interval_days: nextIntervalDays,
+        prev_repetitions: currentReviewState.repetitions,
+        new_repetitions: nextReps,
+      };
+
       const reviewEvent: ReviewEvent = {
         card_id: context.card_id,
         ts_shown: tsShown,
@@ -508,6 +529,7 @@ export const submitReviewTool = createTool({
       await withTransaction(async (client) => {
         await updateReviewState(context.card_id, updateData, client);
         await createReviewLog(reviewLogData, client);
+        await logReviewEvent(reviewEventLogData, client);
         await logReview(reviewEvent, client);
       });
 
