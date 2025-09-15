@@ -10,7 +10,9 @@
     "check": "tsc",
     "check:format": "prettier --check '**/*.ts'",
     "format": "prettier --write '**/*.ts'",
-    "curl:webhook": "bash scripts/curl-webhook.sh"
+    "curl:webhook": "bash scripts/curl-webhook.sh",
+    "lint": "eslint .",
+    "dep:cycles": "madge --circular --extensions ts,tsx src"
   },
   "keywords": [],
   "type": "module",
@@ -47,6 +49,11 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.3",
+    "@typescript-eslint/parser": "^7.18.0",
+    "ajv": "^6.12.6",
+    "eslint": "^8.57.0",
+    "eslint-plugin-import": "^2.29.1",
+    "madge": "^6.1.0",
     "mastra": "^0.11.3",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.1",

@@ -1,4 +1,4 @@
-import type { CommandResponse, ConversationState } from "../commandParser.js";
+import type { CommandResponse, ConversationState } from "../commandTypes.js";
 import { buildToolExecCtx } from "../context.js";
 import { resetSettingsTool } from "../tools/settingsTools.js";
 

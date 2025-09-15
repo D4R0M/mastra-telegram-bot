@@ -4,14 +4,10 @@ import { registerApiRoute as originalRegisterApiRoute } from "@mastra/core/serve
 import { type Mastra } from "@mastra/core";
 import { type Inngest, InngestFunction, NonRetriableError } from "inngest";
 import { serve as originalInngestServe } from "inngest/hono";
-import { checkDue } from "../../inngest/checkDue.js";
+import { checkDue } from "../../inngest/functions/checkDue.js";
 
 // Initialize Inngest with Mastra to get Inngest-compatible workflow helpers
-const {
-  createWorkflow: originalCreateWorkflow,
-  createStep,
-  cloneStep,
-} = init(inngest);
+const { createWorkflow: originalCreateWorkflow, cloneStep } = init(inngest);
 
 export function createWorkflow(
   params: Parameters<typeof originalCreateWorkflow>[0],
@@ -25,8 +21,8 @@ export function createWorkflow(
   });
 }
 
-// Export the Inngest client and Inngest-compatible workflow helpers
-export { inngest, createStep, cloneStep };
+// Export the Inngest client and workflow helpers
+export { inngest, cloneStep };
 
 const inngestFunctions: InngestFunction.Any[] = [checkDue];
 

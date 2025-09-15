@@ -1,4 +1,4 @@
-import type { ConversationState, CommandResponse } from "../commandParser.js";
+import type { ConversationState, CommandResponse } from "../commandTypes.js";
 import { buildToolExecCtx } from "../context.js";
 import { addCardTool } from "../tools/vocabularyTools.js";
 import { formatCard } from "./utils.js";

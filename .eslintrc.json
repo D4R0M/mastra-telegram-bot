@@ -1,0 +1,8 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["import"],
+  "rules": {
+    "import/no-cycle": ["error", { "maxDepth": 1 }]
+  }
+}

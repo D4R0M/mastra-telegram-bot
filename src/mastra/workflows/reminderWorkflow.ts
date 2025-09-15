@@ -1,4 +1,5 @@
-import { createWorkflow, createStep } from "../inngest";
+import { createWorkflow } from "../inngest";
+import { createStep } from "../../steps/core/createStep.js";
 import { z } from "zod";
 import { getPool } from "../../db/client.js";
 import { sendTelegramResponseStep } from "./vocabularyWorkflow";

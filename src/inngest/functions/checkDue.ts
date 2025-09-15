@@ -1,7 +1,7 @@
-import { inngest } from "../mastra/inngest/client.js";
-import { getPool } from "../db/client.js";
-import { isAuthorizedTelegramUser } from "../mastra/authorization.js";
-import { sendTelegramResponseStep } from "../mastra/workflows/vocabularyWorkflow.js";
+import { inngest } from "../../mastra/inngest/client.js";
+import { getPool } from "../../db/client.js";
+import { isAuthorizedTelegramUser } from "../../mastra/authorization.js";
+import { sendTelegramMessage } from "../../telegram/sendMessage.js";
 
 export const checkDue = inngest.onSchedule(
   "schedule.check-due",
@@ -28,9 +28,7 @@ export const checkDue = inngest.onSchedule(
       allowed.map(({ user_id, due_count }) =>
         step.run(`notify-${user_id}`, async () => {
           const message = `You have ${due_count} cards due. /practice`;
-          await sendTelegramResponseStep.execute({
-            inputData: { response: message, chatId: String(user_id) },
-          });
+          await sendTelegramMessage(String(user_id), message);
         }),
       ),
     );
