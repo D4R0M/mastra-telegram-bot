@@ -62,11 +62,11 @@ interface EaseHistogram {
 }
 
 export async function getDueCardsStats(
-  owner_id: string,
+  user_id: string,
   timezone: string = "Europe/Stockholm",
   logger?: IMastraLogger,
 ) {
-  const cacheKey = `dueCards:${owner_id}`;
+  const cacheKey = `dueCards:${user_id}`;
   const cached = statsCache.get<DueCardsStats>(cacheKey);
   if (cached) {
     logger?.info("📝 [StatisticsHelper] Returning cached due cards statistics");
@@ -80,7 +80,7 @@ export async function getDueCardsStats(
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
   const statsQuery = `
-    SELECT 
+    SELECT
       COUNT(*) as total_cards,
       COUNT(CASE WHEN rs.queue = 'new' THEN 1 END) as new_cards,
       COUNT(CASE WHEN rs.queue = 'learning' THEN 1 END) as learning_cards,
@@ -91,12 +91,12 @@ export async function getDueCardsStats(
       COUNT(CASE WHEN rs.due_date = $3 THEN 1 END) as cards_due_tomorrow,
       COALESCE(AVG(rs.ease_factor), 2.5) as average_ease,
       COALESCE(SUM(rs.repetitions), 0) as total_reviews
-    FROM cards c
-    LEFT JOIN review_state rs ON c.id = rs.card_id
-    WHERE c.owner_id = $1::bigint AND c.active = true
+    FROM review_state rs
+    JOIN cards c ON rs.card_id = c.id
+    WHERE rs.user_id = $1::bigint AND c.active = true
   `;
 
-  const result = await pool.query(statsQuery, [owner_id, today, tomorrow]);
+  const result = await pool.query(statsQuery, [user_id, today, tomorrow]);
   const stats = result.rows[0] || {};
 
   const formatted: DueCardsStats = {
@@ -117,11 +117,11 @@ export async function getDueCardsStats(
 }
 
 export async function getRetentionStats(
-  owner_id: string,
+  user_id: string,
   success_threshold: number = 3,
   logger?: IMastraLogger,
 ) {
-  const cacheKey = `retention:${owner_id}`;
+  const cacheKey = `retention:${user_id}`;
   const cached = statsCache.get<RetentionStats>(cacheKey);
   if (cached) {
     logger?.info("📝 [StatisticsHelper] Returning cached retention statistics");
@@ -146,7 +146,7 @@ export async function getRetentionStats(
         COUNT(CASE WHEN rl.reviewed_at >= $4 AND rl.grade >= $2 THEN 1 END) as successful_last_30_days
       FROM review_log rl
       JOIN cards c ON rl.card_id = c.id
-      WHERE c.owner_id = $1::bigint AND c.active = true
+      WHERE rl.user_id = $1::bigint AND c.active = true
     ),
     card_maturity AS (
       SELECT 
@@ -154,7 +154,7 @@ export async function getRetentionStats(
         COUNT(CASE WHEN rs.interval_days < 21 AND rs.interval_days > 0 THEN 1 END) as young_cards
       FROM review_state rs
       JOIN cards c ON rs.card_id = c.id
-      WHERE c.owner_id = $1::bigint AND c.active = true
+      WHERE rs.user_id = $1::bigint AND c.active = true
     )
     SELECT 
       rs.*,
@@ -164,7 +164,7 @@ export async function getRetentionStats(
   `;
 
   const result = await pool.query(retentionQuery, [
-    owner_id,
+    user_id,
     success_threshold,
     sevenDaysAgo,
     thirtyDaysAgo,
@@ -204,11 +204,11 @@ export async function getRetentionStats(
 }
 
 export async function getStreakStats(
-  owner_id: string,
+  user_id: string,
   timezone: string = "Europe/Stockholm",
   logger?: IMastraLogger,
 ) {
-  const cacheKey = `streak:${owner_id}`;
+  const cacheKey = `streak:${user_id}`;
   const cached = statsCache.get<StreakStats>(cacheKey);
   if (cached) {
     logger?.info("📝 [StatisticsHelper] Returning cached streak statistics");
@@ -222,38 +222,35 @@ export async function getStreakStats(
 
   // Get review dates and counts
   const reviewDatesQuery = `
-    SELECT 
+    SELECT
       DATE(rl.reviewed_at) as review_date,
       COUNT(*) as reviews_count
     FROM review_log rl
-    JOIN cards c ON rl.card_id = c.id
-    WHERE c.owner_id = $1::bigint AND c.active = true
+    WHERE rl.user_id = $1::bigint
     GROUP BY DATE(rl.reviewed_at)
     ORDER BY review_date DESC
   `;
 
   // Get overall statistics
   const overallStatsQuery = `
-    SELECT 
+    SELECT
       COUNT(DISTINCT DATE(rl.reviewed_at)) as total_study_days,
       COUNT(CASE WHEN DATE(rl.reviewed_at) = $2 THEN 1 END) as reviews_today,
       MAX(rl.reviewed_at) as last_review_date,
       AVG(daily_counts.daily_reviews) as average_daily_reviews
     FROM review_log rl
-    JOIN cards c ON rl.card_id = c.id
     JOIN (
       SELECT DATE(reviewed_at) as date, COUNT(*) as daily_reviews
       FROM review_log rl2
-      JOIN cards c2 ON rl2.card_id = c2.id
-      WHERE c2.owner_id = $1::bigint AND c2.active = true
+      WHERE rl2.user_id = $1::bigint
       GROUP BY DATE(reviewed_at)
     ) daily_counts ON DATE(rl.reviewed_at) = daily_counts.date
-    WHERE c.owner_id = $1::bigint AND c.active = true
+    WHERE rl.user_id = $1::bigint
   `;
 
   const [reviewDatesResult, overallStatsResult] = await Promise.all([
-    pool.query(reviewDatesQuery, [owner_id]),
-    pool.query(overallStatsQuery, [owner_id, today]),
+    pool.query(reviewDatesQuery, [user_id]),
+    pool.query(overallStatsQuery, [user_id, today]),
   ]);
 
   const reviewDates = reviewDatesResult.rows.map((row) => ({
@@ -347,11 +344,11 @@ export async function getStreakStats(
 }
 
 export async function getEaseHistogram(
-  owner_id: string,
+  user_id: string,
   bin_size: number = 0.2,
   logger?: IMastraLogger,
 ) {
-  const cacheKey = `easeHistogram:${owner_id}`;
+  const cacheKey = `easeHistogram:${user_id}`;
   const cached = statsCache.get<EaseHistogram>(cacheKey);
   if (cached) {
     logger?.info("📝 [StatisticsHelper] Returning cached ease histogram");
@@ -367,11 +364,11 @@ export async function getEaseHistogram(
     SELECT rs.ease_factor
     FROM review_state rs
     JOIN cards c ON rs.card_id = c.id
-    WHERE c.owner_id = $1::bigint AND c.active = true
+    WHERE rs.user_id = $1::bigint AND c.active = true
     ORDER BY rs.ease_factor
   `;
 
-  const result = await pool.query(easeQuery, [owner_id]);
+  const result = await pool.query(easeQuery, [user_id]);
 
   if (result.rows.length === 0) {
     const empty: EaseHistogram = {

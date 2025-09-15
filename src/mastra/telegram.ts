@@ -17,6 +17,7 @@ import {
   allowUser,
   finalizeInvite,
 } from "./authorization.js";
+import { upsertUser } from "../db/users.js";
 
 export function resolveChatId(update: any): string | undefined {
   return (
@@ -52,6 +53,9 @@ export async function processTelegramUpdate(
     update?.channel_post?.from;
   const userId = from?.id;
   const username = from?.username;
+  const first_name = from?.first_name;
+  const last_name = from?.last_name;
+  const lang_code = from?.language_code;
   const chatType =
     update?.message?.chat?.type ||
     update?.callback_query?.message?.chat?.type ||
@@ -77,6 +81,19 @@ export async function processTelegramUpdate(
   }
 
   const userIdStr = String(userId);
+  if (userId) {
+    try {
+      await upsertUser({
+        user_id: userIdStr,
+        username,
+        first_name,
+        last_name,
+        lang_code,
+      });
+    } catch (err) {
+      logger?.error("user_upsert_failed", { userId: userIdStr, error: err });
+    }
+  }
   const admin = await isAdmin(userIdStr);
   if (!admin && !(await isAuthorizedTelegramUser(userIdStr))) {
     logger?.warn("unauthorized", { userId, username });

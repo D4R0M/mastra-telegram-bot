@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 
 export interface ReviewState {
   card_id: string;
+  user_id: string;
   interval_days: number;
   repetitions: number;
   ease_factor: number;
@@ -17,6 +18,7 @@ export interface ReviewState {
 export interface ReviewLog {
   id: string;
   card_id: string;
+  user_id: string;
   reviewed_at: Date;
   grade: number;
   prev_ease?: number;
@@ -34,6 +36,7 @@ export interface ReviewLog {
 
 export interface CreateReviewStateData {
   card_id: string;
+  user_id: string;
   interval_days?: number;
   repetitions?: number;
   ease_factor?: number;
@@ -56,6 +59,7 @@ export interface UpdateReviewStateData {
 
 export interface CreateReviewLogData {
   card_id: string;
+  user_id: string;
   grade: number;
   prev_ease?: number;
   new_ease?: number;
@@ -75,16 +79,20 @@ export async function createReviewState(
   client?: PoolClient,
 ): Promise<ReviewState> {
   const pool = client || getPool();
+  if (!data.user_id) {
+    throw new Error('user_id is required');
+  }
 
   const result = await pool.query(
     `
-    INSERT INTO review_state (card_id, interval_days, repetitions, ease_factor, due_date, queue, direction_mode)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO review_state (card_id, user_id, interval_days, repetitions, ease_factor, due_date, queue, direction_mode)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     ON CONFLICT (card_id) DO NOTHING
     RETURNING *
   `,
     [
       data.card_id,
+      data.user_id,
       data.interval_days || 0,
       data.repetitions || 0,
       data.ease_factor || 2.5,
@@ -213,7 +221,7 @@ export async function updateReviewState(
 }
 
 export async function getDueCards(
-  owner_id: string,
+  user_id: string,
   limit?: number,
   client?: PoolClient,
 ): Promise<Array<{ card: any; review_state: ReviewState }>> {
@@ -223,15 +231,15 @@ export async function getDueCards(
 
   let query = `
     SELECT c.*, rs.*
-    FROM cards c
-    INNER JOIN review_state rs ON c.id = rs.card_id
-    WHERE c.owner_id = $1::bigint
-      AND c.active = true 
+    FROM review_state rs
+    INNER JOIN cards c ON c.id = rs.card_id
+    WHERE rs.user_id = $1::bigint
+      AND c.active = true
       AND rs.due_date <= $2
     ORDER BY rs.due_date ASC, c.created_at ASC
   `;
 
-  const params = [owner_id, today];
+  const params = [user_id, today];
 
   if (limit) {
     query += ` LIMIT $3`;
@@ -274,19 +282,23 @@ export async function createReviewLog(
   client?: PoolClient,
 ): Promise<ReviewLog> {
   const pool = client || getPool();
+  if (!data.user_id) {
+    throw new Error('user_id is required');
+  }
 
   const result = await pool.query(
     `
     INSERT INTO review_log (
-      card_id, grade, prev_ease, new_ease, prev_interval, new_interval,
+      card_id, user_id, grade, prev_ease, new_ease, prev_interval, new_interval,
       prev_repetitions, new_repetitions, prev_due, new_due, latency_ms,
       session_id, direction
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     RETURNING *
   `,
     [
       data.card_id,
+      data.user_id,
       data.grade,
       data.prev_ease,
       data.new_ease,
@@ -306,7 +318,7 @@ export async function createReviewLog(
 }
 
 export async function getReviewStats(
-  owner_id: string,
+  user_id: string,
   client?: PoolClient,
 ): Promise<{
   total_cards: number;
@@ -322,29 +334,28 @@ export async function getReviewStats(
 
   const result = await pool.query(
     `
-    SELECT 
+    SELECT
       COUNT(*) as total_cards,
       COUNT(CASE WHEN rs.due_date <= $2 THEN 1 END) as due_today,
       COUNT(CASE WHEN rs.queue = 'new' THEN 1 END) as new_cards,
       COUNT(CASE WHEN rs.queue = 'learning' THEN 1 END) as learning_cards,
       COUNT(CASE WHEN rs.queue = 'review' THEN 1 END) as review_cards
-    FROM cards c
-    LEFT JOIN review_state rs ON c.id = rs.card_id
-    WHERE c.owner_id = $1::bigint AND c.active = true
+    FROM review_state rs
+    JOIN cards c ON rs.card_id = c.id
+    WHERE rs.user_id = $1::bigint AND c.active = true
   `,
-    [owner_id, today],
+    [user_id, today],
   );
 
   const reviewedTodayResult = await pool.query(
     `
     SELECT COUNT(*) as reviewed_today
     FROM review_log rl
-    INNER JOIN cards c ON rl.card_id = c.id
-    WHERE c.owner_id = $1::bigint
+    WHERE rl.user_id = $1::bigint
       AND rl.reviewed_at >= $2::date
       AND rl.reviewed_at < ($2::date + interval '1 day')
   `,
-    [owner_id, today],
+    [user_id, today],
   );
 
   const stats = result.rows[0];
@@ -362,6 +373,7 @@ export async function getReviewStats(
 
 export interface ReviewEvent {
   card_id: string;
+  user_id: string;
   ts_shown: Date;
   ts_answered: Date;
   grade: number;
@@ -386,10 +398,14 @@ export async function logReview(
   client?: PoolClient,
 ): Promise<void> {
   const pool = client || getPool();
+  if (!data.user_id) {
+    throw new Error('user_id is required');
+  }
 
   await pool.query(
     `
     INSERT INTO reviews (
+      user_id,
       card_id,
       ts_shown,
       ts_answered,
@@ -411,10 +427,11 @@ export async function logReview(
     )
     VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      $11, $12, $13, $14, $15, $16, $17, $18
+      $11, $12, $13, $14, $15, $16, $17, $18, $19
     )
   `,
     [
+      data.user_id,
       data.card_id,
       data.ts_shown,
       data.ts_answered,
@@ -438,6 +455,7 @@ export async function logReview(
 }
 
 export interface ReviewEventLog {
+  user_id: string;
   user_hash: string;
   session_id?: string;
   card_id?: string;
@@ -457,10 +475,14 @@ export async function logReviewEvent(
   client?: PoolClient,
 ): Promise<void> {
   const pool = client || getPool();
+  if (!data.user_id) {
+    throw new Error('user_id is required');
+  }
 
   await pool.query(
     `
     INSERT INTO review_events (
+      user_id,
       user_hash,
       session_id,
       card_id,
@@ -475,10 +497,11 @@ export async function logReviewEvent(
       new_repetitions
     )
     VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
     )
   `,
     [
+      data.user_id,
       data.user_hash,
       data.session_id,
       data.card_id,

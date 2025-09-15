@@ -9,6 +9,7 @@ vi.mock('../src/db/reviews.ts', () => ({
     due_date: '2024-01-01',
     lapses: 0,
     last_reviewed_at: null,
+    user_id: 'user1',
   })),
   updateReviewState: vi.fn(),
   createReviewLog: vi.fn(),
@@ -61,6 +62,7 @@ describe('submitReviewTool', () => {
     expect(result.success).toBe(true);
     expect(logReview).toHaveBeenCalled();
     const event = vi.mocked(logReview).mock.calls[0][0];
+    expect(event.user_id).toBe('user1');
     expect(event.ts_shown).toBeInstanceOf(Date);
     expect(isNaN(event.ts_shown.getTime())).toBe(false);
     expect(event.scheduled_at).toBeInstanceOf(Date);
@@ -69,6 +71,7 @@ describe('submitReviewTool', () => {
     expect(logReviewEvent).toHaveBeenCalled();
     const logEvent = vi.mocked(logReviewEvent).mock.calls[0][0];
     const expectedHash = createHash('sha256').update('user1').digest('hex');
+    expect(logEvent.user_id).toBe('user1');
     const expectedLatency =
       event.ts_answered.getTime() - event.ts_shown.getTime();
     expect(logEvent.user_hash).toBe(expectedHash);
