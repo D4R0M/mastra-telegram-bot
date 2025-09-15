@@ -126,6 +126,7 @@ export const getDueCardsTool = createTool({
           cardsWithoutState.map((card) =>
             createReviewState({
               card_id: card.id,
+              user_id: context.owner_id,
               interval_days: 0,
               repetitions: 0,
               ease_factor: 2.5,
@@ -243,6 +244,7 @@ export const startReviewTool = createTool({
         logger?.info("📝 [StartReview] Creating new review state for card");
         reviewState = await createReviewState({
           card_id: context.card_id,
+          user_id: context.owner_id,
         });
       }
 
@@ -476,6 +478,7 @@ export const submitReviewTool = createTool({
 
       const reviewLogData: CreateReviewLogData = {
         card_id: context.card_id,
+        user_id: context.owner_id,
         grade: context.grade,
         prev_ease: currentReviewState.ease_factor,
         new_ease: nextEase,
@@ -491,6 +494,7 @@ export const submitReviewTool = createTool({
       };
 
       const reviewEventLogData = {
+        user_id: context.owner_id,
         user_hash: userHash,
         session_id: context.session_id,
         card_id: context.card_id,
@@ -506,6 +510,7 @@ export const submitReviewTool = createTool({
       };
 
       const reviewEvent: ReviewEvent = {
+        user_id: context.owner_id,
         card_id: context.card_id,
         ts_shown: tsShown,
         ts_answered: tsAnswered,
