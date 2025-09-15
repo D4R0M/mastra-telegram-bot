@@ -92,13 +92,11 @@ describe('processCommand', () => {
     expect(result.response).toContain('Unknown command');
   });
 
-  it('rejects /check_ml_log command for non-admin users', async () => {
+  it('routes /check_ml_log without requiring admin privileges in the parser', async () => {
     const result = await processCommand('/check_ml_log', 'user', 'chat');
 
-    expect(result.response).toBe('Not authorized.');
-    expect(result.parse_mode).toBe('HTML');
-    expect(mockCheckMlLog).not.toHaveBeenCalled();
-    expect(isAdminMock).toHaveBeenCalledWith('user');
+    expect(result.response).toBe('check-ml-log');
+    expect(mockCheckMlLog).toHaveBeenCalledWith([], '', 'user', undefined, undefined);
   });
 
   it('processes slash commands even with active conversation state', async () => {
