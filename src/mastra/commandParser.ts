@@ -1,5 +1,9 @@
 import type { IMastraLogger } from "@mastra/core/logger";
-import type { CommandResponse, ConversationState } from "./commandTypes.js";
+import type {
+  CommandResponse,
+  ConversationState,
+  CommandContext,
+} from "./commandTypes.js";
 import { buildToolExecCtx } from "./context.js";
 import { addCardTool, editCardTool } from "./tools/vocabularyTools.js";
 import { submitReviewTool } from "./tools/reviewTools.js";
@@ -15,7 +19,7 @@ import {
 import { updateReminderSettingsTool } from "./tools/reminderTools.js";
 import { clearConversationState } from "./conversationStateStorage.js";
 
-export type { CommandResponse, ConversationState } from "./commandTypes.js";
+export type { CommandResponse, ConversationState, CommandContext } from "./commandTypes.js";
 
 export interface ParsedCommand {
   command: string;
@@ -1596,6 +1600,7 @@ export async function processCommand(
   mastra?: any,
   stateExpired: boolean = false,
   username?: string,
+  commandContext?: CommandContext,
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
   logger?.info("🔧 [CommandParser] Processing message:", {
@@ -1747,7 +1752,14 @@ export async function processCommand(
 
   const handler = commandRegistry[command];
   if (handler) {
-    return handler(params, rawParams, userId, conversationState, mastra);
+    return handler(
+      params,
+      rawParams,
+      userId,
+      conversationState,
+      mastra,
+      commandContext,
+    );
   }
 
   return {

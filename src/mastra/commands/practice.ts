@@ -1,18 +1,29 @@
-import type { ConversationState, CommandResponse } from "../commandTypes.js";
+import type {
+  ConversationState,
+  CommandResponse,
+  CommandContext,
+} from "../commandTypes.js";
 import { buildToolExecCtx } from "../context.js";
 import { getDueCardsTool, startReviewTool } from "../tools/reviewTools.js";
 
-export default async function handlePracticeCommand(
-  params: string[],
-  rawParams: string,
+const WEBAPP_ENABLED = process.env.WEBAPP_PRACTICE_ENABLED === "true";
+const PUBLIC_WEBAPP_URL = process.env.PUBLIC_WEBAPP_URL;
+
+function buildWebAppUrl(): string | undefined {
+  if (!PUBLIC_WEBAPP_URL) return undefined;
+  const trimmed = PUBLIC_WEBAPP_URL.endsWith("/")
+    ? PUBLIC_WEBAPP_URL.slice(0, -1)
+    : PUBLIC_WEBAPP_URL;
+  return `${trimmed}/practice?session=practice`;
+}
+
+async function startInlinePractice(
   userId: string,
-  state?: ConversationState,
   mastra?: any,
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
 
   try {
-    // Get due cards
     const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
       requestId: userId,
     });
@@ -39,17 +50,17 @@ export default async function handlePracticeCommand(
       };
     }
 
-    // Start review session
     const {
       runtimeContext: startRuntimeContext,
       tracingContext: startTracingContext,
     } = buildToolExecCtx(mastra, { requestId: userId });
-    // Generate a single session ID and use it consistently
     const sessionId = `session_${userId}_${Date.now()}`;
+    const firstCard = dueResult.cards[0];
+    const cardId = firstCard.card_id;
     const startResult = await startReviewTool.execute({
       context: {
         owner_id: userId,
-        card_id: dueResult.cards[0].card_id, // Start with first due card
+        card_id: cardId,
         session_id: sessionId,
       },
       runtimeContext: startRuntimeContext,
@@ -58,10 +69,9 @@ export default async function handlePracticeCommand(
     });
 
     if (startResult.success && startResult.card) {
-      // Ensure we retain the back side of the card in the session state
       const card = {
         ...startResult.card,
-        back: startResult.card.back ?? dueResult.cards[0].back,
+        back: startResult.card.back ?? firstCard.back,
       };
       const currentIndex = 1;
       const totalCards = dueResult.cards.length;
@@ -81,14 +91,13 @@ export default async function handlePracticeCommand(
           },
         },
         parse_mode: "HTML",
-        remove_keyboard: true,
-      };
-    } else {
-      return {
-        response: `❌ ${startResult.message || "Could not start review session"}`,
-        parse_mode: "HTML",
       };
     }
+
+    return {
+      response: `❌ ${startResult.message || "Could not start review session"}`,
+      parse_mode: "HTML",
+    };
   } catch (error) {
     logger?.error("❌ [CommandParser] Error starting practice:", error);
     return {
@@ -96,4 +105,51 @@ export default async function handlePracticeCommand(
       parse_mode: "HTML",
     };
   }
+}
+
+export default async function handlePracticeCommand(
+  params: string[],
+  rawParams: string,
+  userId: string,
+  state?: ConversationState,
+  mastra?: any,
+  commandContext?: CommandContext,
+): Promise<CommandResponse> {
+  const forceInline = params.some(
+    (param) => typeof param === "string" && param.toLowerCase() === "inline",
+  );
+
+  const webAppUrl = buildWebAppUrl();
+  const webAppEnabled = WEBAPP_ENABLED && !!webAppUrl;
+  const chatType = commandContext?.chatType;
+  const isPrivate = chatType ? chatType === "private" : true;
+
+  if (webAppEnabled && isPrivate && !forceInline) {
+    return {
+      response: [
+        "🧠 <b>Practice in chat</b>",
+        "Use the Telegram WebApp for a faster review flow.",
+        "If the WebApp doesn't open, choose inline mode instead.",
+      ].join("\n"),
+      parse_mode: "HTML",
+      inline_keyboard: {
+        inline_keyboard: [
+          [
+            {
+              text: "🚀 Open Practice",
+              web_app: { url: webAppUrl! },
+            },
+          ],
+          [
+            {
+              text: "⬇ Use inline mode",
+              callback_data: "practice_inline",
+            },
+          ],
+        ],
+      },
+    };
+  }
+
+  return startInlinePractice(userId, mastra);
 }

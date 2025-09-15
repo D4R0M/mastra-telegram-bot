@@ -96,7 +96,14 @@ describe('processCommand', () => {
     const result = await processCommand('/check_ml_log', 'user', 'chat');
 
     expect(result.response).toBe('check-ml-log');
-    expect(mockCheckMlLog).toHaveBeenCalledWith([], '', 'user', undefined, undefined);
+    expect(mockCheckMlLog).toHaveBeenCalledWith(
+      [],
+      '',
+      'user',
+      undefined,
+      undefined,
+      undefined,
+    );
   });
 
   it('processes slash commands even with active conversation state', async () => {

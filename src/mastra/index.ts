@@ -24,6 +24,10 @@ import { inngest, inngestServe, registerCronWorkflow } from "./inngest";
 import { runMigrations } from "../db/migrate.js";
 import { processTelegramUpdate } from "./telegram.js";
 import {
+  createPracticeNextHandler,
+  createPracticeSubmitHandler,
+} from "../server/routes/practice.js";
+import {
   addCardTool,
   listCardsTool,
   editCardTool,
@@ -103,6 +107,81 @@ class ProductionPinoLogger extends MastraLogger {
   }
 }
 
+const practiceRoutesEnabled = process.env.WEBAPP_PRACTICE_ENABLED === "true";
+
+const telegramOriginPatterns = [
+  /^https:\/\/[a-z0-9.-]+\.telegram\.org$/i,
+  /^https:\/\/telegram\.org$/i,
+  /^https:\/\/t\.me$/i,
+  /^https:\/\/web\.telegram\.org$/i,
+  /^https:\/\/appassets\.androidplatform\.net$/i,
+  /^https:\/\/[a-z0-9.-]+\.telegram-cdn\.org$/i,
+];
+
+const publicWebAppOrigin = (() => {
+  if (!process.env.PUBLIC_WEBAPP_URL) return undefined;
+  try {
+    return new URL(process.env.PUBLIC_WEBAPP_URL).origin;
+  } catch {
+    return undefined;
+  }
+})();
+
+function isAllowedOrigin(origin?: string | null): boolean {
+  if (!origin) return false;
+  if (publicWebAppOrigin && origin === publicWebAppOrigin) {
+    return true;
+  }
+  if (origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1")) {
+    return true;
+  }
+  return telegramOriginPatterns.some((pattern) => pattern.test(origin));
+}
+
+const corsMiddleware = async (c: any, next: () => Promise<void>) => {
+  const origin = c.req.header("origin");
+  const allowed = isAllowedOrigin(origin);
+
+  const appendVaryOrigin = () => {
+    const current = c.res.headers.get("Vary");
+    if (!current) {
+      c.res.headers.set("Vary", "Origin");
+      return;
+    }
+    const values = current
+      .split(",")
+      .map((value: string) => value.trim().toLowerCase());
+    if (!values.includes("origin")) {
+      c.res.headers.set("Vary", `${current}, Origin`);
+    }
+  };
+
+  if (c.req.method === "OPTIONS") {
+    if (allowed && origin) {
+      c.res.headers.set("Access-Control-Allow-Origin", origin);
+    }
+    if (origin) {
+      appendVaryOrigin();
+    }
+    c.res.headers.set(
+      "Access-Control-Allow-Headers",
+      "Content-Type, X-Telegram-Init-Data",
+    );
+    c.res.headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    c.res.headers.set("Access-Control-Max-Age", "86400");
+    return c.text("", 204);
+  }
+
+  await next();
+
+  if (allowed && origin) {
+    c.res.headers.set("Access-Control-Allow-Origin", origin);
+  }
+  if (origin) {
+    appendVaryOrigin();
+  }
+};
+
 // Initialize database before creating Mastra instance
 // Only run migrations if DATABASE_URL exists
 if (process.env.DATABASE_URL) {
@@ -171,6 +250,7 @@ export const mastra = new Mastra({
     host: "0.0.0.0",
     port: parseInt(process.env.PORT || "3000"),
     middleware: [
+      corsMiddleware,
       async (c, next) => {
         const mastra = c.get("mastra");
         const logger = mastra?.getLogger();
@@ -258,6 +338,22 @@ export const mastra = new Mastra({
           };
         },
       },
+      ...(practiceRoutesEnabled
+        ? [
+            {
+              path: "/api/practice/next",
+              method: "GET",
+              createHandler: async ({ mastra }) =>
+                createPracticeNextHandler(mastra),
+            },
+            {
+              path: "/api/practice/submit",
+              method: "POST",
+              createHandler: async ({ mastra }) =>
+                createPracticeSubmitHandler(mastra),
+            },
+          ]
+        : []),
     ],
   },
   logger:

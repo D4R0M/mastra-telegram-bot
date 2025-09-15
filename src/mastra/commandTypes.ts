@@ -22,3 +22,7 @@ export interface CommandResponse {
   remove_keyboard?: boolean;
   document?: { filename: string; content: string };
 }
+
+export interface CommandContext {
+  chatType?: string;
+}

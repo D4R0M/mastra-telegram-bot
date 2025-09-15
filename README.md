@@ -116,12 +116,16 @@ The bot will use **polling mode** in development (no webhook required).
 - `PORT`: Server port (Railway sets this automatically)
 - `INNGEST_CONFIG`: Custom Inngest configuration path
 - `ADMIN_USER_IDS`: Comma-separated Telegram user IDs with admin access
+- `PUBLIC_WEBAPP_URL`: Base URL where the Telegram WebApp is hosted (for example `https://your-app.railway.app`)
+- `WEBAPP_PRACTICE_ENABLED`: Set to `true` to enable the in-chat practice WebApp
 
 ### API Endpoints
 
 - `GET /health` - Health check (returns `{"status":"ok"}`)
 - `POST /webhooks/telegram/action` - Telegram webhook endpoint
 - `POST /api/inngest` - Inngest workflow registration
+- `GET /api/practice/next` - Telegram WebApp endpoint for fetching the next due flashcard
+- `POST /api/practice/submit` - Telegram WebApp endpoint for submitting a review grade
 
 ### Scheduled reminders (Inngest)
 

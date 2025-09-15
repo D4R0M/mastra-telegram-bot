@@ -59,6 +59,8 @@ describe("grade callback handling", () => {
       undefined,
       mastra,
       false,
+      undefined,
+      { chatType: undefined },
     );
     expect(fetchMock).toHaveBeenCalled();
   });

@@ -1,4 +1,8 @@
-import type { ConversationState, CommandResponse } from "../commandTypes.js";
+import type {
+  ConversationState,
+  CommandResponse,
+  CommandContext,
+} from "../commandTypes.js";
 
 export type CommandHandler = (
   params: string[],
@@ -6,6 +10,7 @@ export type CommandHandler = (
   userId: string,
   state?: ConversationState,
   mastra?: any,
+  context?: CommandContext,
 ) => Promise<CommandResponse>;
 
 import add from "./add.js";
