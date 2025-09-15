@@ -139,6 +139,9 @@ async function handleConversationState(
     case "settings_menu":
       return handleSettingsMenuFlow(message, userId, state, mastra);
 
+    case "filter_cards":
+      return handleFilterCardsFlow(message, userId, state, mastra);
+
     default:
       // Clear unknown state
       return {
@@ -1095,9 +1098,143 @@ async function handleSettingsMenuFlow(
   };
 }
 
+async function handleFilterCardsFlow(
+  message: string,
+  userId: string,
+  state: ConversationState,
+  mastra?: any,
+): Promise<CommandResponse> {
+  const logger = mastra?.getLogger();
+
+  const trimmed = message.trim();
+  const normalized = trimmed.toLowerCase();
+  const currentSort =
+    typeof state.data?.sort === "string" && state.data.sort.length > 0
+      ? state.data.sort
+      : "date";
+
+  if (normalized === "cancel" || normalized === "exit" || normalized === "stop") {
+    return {
+      response: "❌ Tag filtering cancelled.",
+      conversationState: undefined,
+      parse_mode: "HTML",
+    };
+  }
+
+  const listHandler = commandRegistry["/list"];
+
+  if (normalized === "clear" || normalized === "none" || normalized === "all") {
+    if (listHandler) {
+      const result = await listHandler(
+        [],
+        "",
+        userId,
+        {
+          mode: "list_view",
+          step: 0,
+          data: { offset: 0, sort: currentSort },
+        },
+        mastra,
+      );
+      return { ...result, conversationState: undefined };
+    }
+    return {
+      response: "✅ Tag filter cleared.",
+      conversationState: undefined,
+      parse_mode: "HTML",
+    };
+  }
+
+  const tags = trimmed
+    .split(/[,;]+/)
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+
+  if (tags.length === 0) {
+    return {
+      response:
+        '❌ Please provide at least one tag (comma-separated). Type "clear" to remove the filter or "cancel" to exit.',
+      conversationState: {
+        mode: "filter_cards",
+        step: 1,
+        data: { ...state.data, sort: currentSort },
+      },
+      parse_mode: "HTML",
+    };
+  }
+
+  if (!listHandler) {
+    logger?.error("❌ [CommandParser] List handler unavailable for filtering");
+    return {
+      response: "❌ List command not available right now.",
+      conversationState: undefined,
+      parse_mode: "HTML",
+    };
+  }
+
+  const listState: ConversationState = {
+    mode: "list_view",
+    step: 0,
+    data: { offset: 0, sort: currentSort, tags },
+  };
+
+  const result = await listHandler([], "", userId, listState, mastra);
+  return { ...result, conversationState: undefined };
+}
+
 // ===============================
 // Callback Handlers
 // ===============================
+
+function parseListCallbackData(
+  action: string,
+  payload: string,
+): { offset: number; sort: string; tags?: string[] } {
+  let offset = 0;
+  let sort = "date";
+  let tags: string[] | undefined;
+
+  if (!payload) {
+    return { offset, sort, tags };
+  }
+
+  const rawParts = payload.split(":");
+  const parts = rawParts.filter((part) => part.length > 0);
+  let index = 0;
+
+  const parseOffset = (value: string | undefined): number => {
+    if (!value) return 0;
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  if (action === "page") {
+    offset = parseOffset(parts[index++]);
+    sort = parts[index++] || "date";
+  } else if (action === "sort") {
+    sort = parts[index++] || "date";
+    offset = parseOffset(parts[index++]);
+  } else if (action === "filter_tag" || action === "clear_filter") {
+    sort = parts[index++] || "date";
+  }
+
+  for (; index < parts.length; index++) {
+    const part = parts[index];
+    if (part.startsWith("tags=")) {
+      const decoded = decodeURIComponent(part.slice(5));
+      if (!decoded) {
+        tags = [];
+      } else {
+        tags = decoded
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0);
+      }
+    }
+  }
+
+  return { offset, sort, tags };
+}
 
 export async function handleListCallback(
   action: string,
@@ -1147,16 +1284,20 @@ export async function handleListCallback(
   }
 
   if (action === "page" || action === "sort") {
-    const [param, sort] = cardId.split(":");
-    const offset =
-      action === "page" ? parseInt(param) || 0 : parseInt(sort) || 0;
-    const chosenSort = action === "page" ? sort || "date" : param;
+    const { offset, sort: chosenSort, tags } = parseListCallbackData(
+      action,
+      cardId,
+    );
     const listHandler = commandRegistry["/list"];
     if (listHandler) {
+      const data: Record<string, unknown> = { offset, sort: chosenSort };
+      if (tags !== undefined) {
+        data.tags = tags;
+      }
       const state: ConversationState = {
         mode: "list_view",
         step: 0,
-        data: { offset, sort: chosenSort },
+        data,
       };
       return listHandler([], "", userId, state, mastra);
     }
@@ -1169,9 +1310,51 @@ export async function handleListCallback(
     };
   }
 
-  if (action === "filter_tag" || action === "filter_search") {
+  if (action === "filter_tag") {
+    const { sort, tags } = parseListCallbackData(action, cardId);
+    const currentFilterText =
+      tags && tags.length > 0
+        ? `\nCurrently filtered by: <b>${tags.join(", ")}</b>`
+        : "";
+    const prompt =
+      `🏷 <b>Filter by Tag</b>${currentFilterText}` +
+      "\n\nSend the tag name(s) you want to filter by. Separate multiple tags with commas." +
+      "\n\nType <code>clear</code> to remove the current filter or <code>cancel</code> to exit.";
+    const data: Record<string, unknown> = { sort };
+    if (tags !== undefined) {
+      data.tags = tags;
+    }
     return {
-      response: "Filtering coming soon.",
+      response: prompt,
+      conversationState: {
+        mode: "filter_cards",
+        step: 1,
+        data,
+      },
+      parse_mode: "HTML",
+    };
+  }
+
+  if (action === "clear_filter") {
+    const { sort } = parseListCallbackData(action, cardId);
+    const listHandler = commandRegistry["/list"];
+    if (listHandler) {
+      const state: ConversationState = {
+        mode: "list_view",
+        step: 0,
+        data: { offset: 0, sort },
+      };
+      return listHandler([], "", userId, state, mastra);
+    }
+    return {
+      response: "❌ List command not available right now.",
+      parse_mode: "HTML",
+    };
+  }
+
+  if (action === "filter_search") {
+    return {
+      response: "Search filtering coming soon.",
       parse_mode: "HTML",
     };
   }

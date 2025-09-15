@@ -34,6 +34,7 @@ import adminHelp from "./adminhelp.js";
 import promote from "./promote.js";
 import demote from "./demote.js";
 import checkMlLog from "./checkMLLog.js";
+import checkReviews from "./checkReviews.js";
 
 export const commandRegistry: Record<string, CommandHandler> = {
   "/add": add,
@@ -79,4 +80,5 @@ export const commandRegistry: Record<string, CommandHandler> = {
   "/demote": demote,
   "/adminhelp": adminHelp,
   "/check_ml_log": checkMlLog,
+  "/check_reviews": checkReviews,
 };
