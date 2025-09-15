@@ -24,6 +24,7 @@ import reset from "./reset.js";
 import reminders from "./reminders.js";
 import testCmd from "./test.js";
 import start from "./start.js";
+import debugReminders from "./debugReminders.js";
 
 export const commandRegistry: Record<string, CommandHandler> = {
   "/add": add,
@@ -60,4 +61,5 @@ export const commandRegistry: Record<string, CommandHandler> = {
   "/remind": reminders,
   "/reminders": reminders,
   "/test": testCmd,
+  "/debug_reminders": debugReminders,
 };
