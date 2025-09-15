@@ -40,7 +40,7 @@ export async function createCard(data: CreateCardData, client?: PoolClient): Pro
   
   const result = await pool.query(`
     INSERT INTO cards (owner_id, front, back, tags, example, lang_front, lang_back)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    VALUES ($1::bigint, $2, $3, $4, $5, $6, $7)
     RETURNING *
   `, [
     data.owner_id,
@@ -60,7 +60,7 @@ export async function getCardById(id: string, owner_id: string, client?: PoolCli
   
   const result = await pool.query(`
     SELECT * FROM cards
-    WHERE id = $1 AND owner_id = $2 AND active = true
+    WHERE id = $1 AND owner_id = $2::bigint AND active = true
   `, [id, owner_id]);
   
   return result.rows[0] || null;
@@ -80,7 +80,7 @@ export async function getCardsByOwner(
   
   let query = `
     SELECT * FROM cards
-    WHERE owner_id = $1
+    WHERE owner_id = $1::bigint
   `;
   const params: any[] = [owner_id];
   let paramIndex = 2;
@@ -170,7 +170,7 @@ export async function updateCard(id: string, owner_id: string, data: UpdateCardD
   const query = `
     UPDATE cards 
     SET ${setClause.join(', ')}
-    WHERE id = $1 AND owner_id = $2 AND active = true
+    WHERE id = $1 AND owner_id = $2::bigint AND active = true
     RETURNING *
   `;
   
@@ -184,7 +184,7 @@ export async function deleteCard(id: string, owner_id: string, client?: PoolClie
   const result = await pool.query(`
     UPDATE cards 
     SET active = false
-    WHERE id = $1 AND owner_id = $2
+    WHERE id = $1 AND owner_id = $2::bigint
   `, [id, owner_id]);
   
   return (result.rowCount || 0) > 0;
@@ -193,7 +193,7 @@ export async function deleteCard(id: string, owner_id: string, client?: PoolClie
 export async function countCards(owner_id: string, options: { active?: boolean; tags?: string[] } = {}, client?: PoolClient): Promise<number> {
   const pool = client || getPool();
   
-  let query = `SELECT COUNT(*) FROM cards WHERE owner_id = $1`;
+  let query = `SELECT COUNT(*) FROM cards WHERE owner_id = $1::bigint`;
   const params: any[] = [owner_id];
   let paramIndex = 2;
   
