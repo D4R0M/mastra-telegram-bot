@@ -179,21 +179,50 @@ const botId = process.env.TELEGRAM_BOT_TOKEN?.split(":")[0];
 
 const QUALITY_TO_GRADE: Record<string, number> = {
   again: 0,
+  forgot: 0,
+  wrong: 1,
   hard: 3,
+  difficult: 3,
   good: 4,
   easy: 5,
+  "0": 0,
   "1": 0,
   "2": 3,
   "3": 4,
   "4": 5,
+  "5": 5,
 };
+
+function parseGrade(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    if (Number.isInteger(value) && value >= 0 && value <= 5) {
+      return value;
+    }
+    return undefined;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return undefined;
+    }
+    const parsed = Number(trimmed);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 5) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
 
 function resolveGrade(quality: unknown): number | undefined {
   if (typeof quality === "number") {
-    return QUALITY_TO_GRADE[String(quality)];
+    return parseGrade(quality);
   }
   if (typeof quality === "string") {
-    return QUALITY_TO_GRADE[quality.toLowerCase()];
+    const normalized = quality.trim().toLowerCase();
+    if (normalized.length === 0) {
+      return undefined;
+    }
+    return QUALITY_TO_GRADE[normalized];
   }
   return undefined;
 }
@@ -339,6 +368,7 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
 
       const payload = await c.req.json();
       const cardId = payload?.cardId;
+      const gradeValue = parseGrade(payload?.grade);
       const quality = payload?.quality;
       const elapsedMs = Number(payload?.elapsedMs ?? 0);
       const clientTs = Number(payload?.clientTs ?? 0);
@@ -348,9 +378,9 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
         return c.json({ error: "cardId required" }, 400);
       }
 
-      const grade = resolveGrade(quality);
+      const grade = gradeValue ?? resolveGrade(quality);
       if (grade === undefined) {
-        return c.json({ error: "Invalid quality" }, 400);
+        return c.json({ error: "Invalid grade" }, 400);
       }
 
       const safeElapsed = Number.isFinite(elapsedMs) ? elapsedMs : 0;

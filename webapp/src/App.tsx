@@ -6,29 +6,33 @@ import {
   initTelegram,
   teardownTelegram,
 } from "./telegram";
-import type { PracticeCard, Quality } from "./types";
+import type { PracticeCard, ReviewGrade } from "./types";
 
-const QUALITY_OPTIONS: Array<{
-  id: Quality;
+const GRADE_OPTIONS: Array<{
+  id: ReviewGrade;
   label: string;
   hint: string;
-  tone: "again" | "hard" | "good" | "easy";
+  tone: "forgot" | "wrong" | "hard" | "difficult" | "good" | "easy";
 }> = [
-  { id: "again", label: "Again", hint: "1", tone: "again" },
-  { id: "hard", label: "Hard", hint: "2", tone: "hard" },
-  { id: "good", label: "Good", hint: "3", tone: "good" },
-  { id: "easy", label: "Easy", hint: "4", tone: "easy" },
+  { id: 0, label: "Forgot", hint: "0", tone: "forgot" },
+  { id: 1, label: "Wrong", hint: "1", tone: "wrong" },
+  { id: 2, label: "Hard", hint: "2", tone: "hard" },
+  { id: 3, label: "Difficult", hint: "3", tone: "difficult" },
+  { id: 4, label: "Good", hint: "4", tone: "good" },
+  { id: 5, label: "Easy", hint: "5", tone: "easy" },
 ];
 
-const KEY_TO_QUALITY: Record<string, Quality> = {
-  "1": "again",
-  "2": "hard",
-  "3": "good",
-  "4": "easy",
+const KEY_TO_GRADE: Record<string, ReviewGrade> = {
+  "0": 0,
+  "1": 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
 };
 
-function qualityLabel(quality: Quality) {
-  return QUALITY_OPTIONS.find((option) => option.id === quality)?.label || "Submit";
+function gradeLabel(grade: ReviewGrade) {
+  return GRADE_OPTIONS.find((option) => option.id === grade)?.label || "Submit";
 }
 
 export default function App() {
@@ -37,7 +41,7 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showAnswer, setShowAnswer] = useState<boolean>(false);
-  const [selectedQuality, setSelectedQuality] = useState<Quality | null>(null);
+  const [selectedGrade, setSelectedGrade] = useState<ReviewGrade | null>(null);
   const [remainingDue, setRemainingDue] = useState<number>(0);
   const [totalDue, setTotalDue] = useState<number>(0);
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -71,7 +75,7 @@ export default function App() {
       setLoading(true);
       setError(null);
       setShowAnswer(false);
-      setSelectedQuality(null);
+      setSelectedGrade(null);
       hideMainButton();
       const response = await fetchNextCard(overrideSession ?? sessionRef.current);
       if (typeof response.dueCount === "number") {
@@ -99,10 +103,10 @@ export default function App() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!card || !selectedQuality || submitting) {
+    if (!card || selectedGrade === null || submitting) {
       return;
     }
-    const quality = selectedQuality;
+    const grade = selectedGrade;
     const currentCard = card;
     const previousRemaining = remainingDue;
     const startedAt = startTime ?? Date.now();
@@ -114,7 +118,7 @@ export default function App() {
       const response = await submitReview({
         sessionId: sessionRef.current ?? undefined,
         cardId: currentCard.id,
-        quality,
+        grade,
         elapsedMs: Math.max(Date.now() - startedAt, 0),
         clientTs: Date.now(),
       });
@@ -129,7 +133,7 @@ export default function App() {
       setRemainingDue(previousRemaining);
       setCard(currentCard);
       setShowAnswer(true);
-      setSelectedQuality(quality);
+      setSelectedGrade(grade);
       const message = err instanceof Error ? err.message : "Submit failed";
       showToast(
         message.toLowerCase() === "unauthorized"
@@ -140,7 +144,7 @@ export default function App() {
     } finally {
       setSubmitting(false);
     }
-  }, [card, selectedQuality, submitting, remainingDue, startTime, loadNextCard, showToast]);
+  }, [card, selectedGrade, submitting, remainingDue, startTime, loadNextCard, showToast]);
 
   useEffect(() => {
     initTelegram(() => window.Telegram?.WebApp?.close());
@@ -153,10 +157,10 @@ export default function App() {
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if (!showAnswer || submitting) return;
-      const quality = KEY_TO_QUALITY[event.key];
-      if (quality && card) {
+      const grade = KEY_TO_GRADE[event.key];
+      if (grade !== undefined && card) {
         event.preventDefault();
-        setSelectedQuality(quality);
+        setSelectedGrade(grade);
       }
     };
     window.addEventListener("keydown", listener);
@@ -164,16 +168,16 @@ export default function App() {
   }, [card, showAnswer, submitting]);
 
   useEffect(() => {
-    if (card && showAnswer && selectedQuality) {
+    if (card && showAnswer && selectedGrade !== null) {
       configureMainButton({
-        text: `Submit – ${qualityLabel(selectedQuality)}`,
+        text: `Submit – ${gradeLabel(selectedGrade)}`,
         onClick: handleSubmit,
         disabled: submitting,
       });
     } else {
       hideMainButton();
     }
-  }, [card, showAnswer, selectedQuality, submitting, handleSubmit]);
+  }, [card, showAnswer, selectedGrade, submitting, handleSubmit]);
 
   const handleReveal = useCallback(() => {
     if (!submitting) {
@@ -181,12 +185,12 @@ export default function App() {
     }
   }, [submitting]);
 
-  const handleQualitySelect = useCallback(
-    (quality: Quality) => {
+  const handleGradeSelect = useCallback(
+    (grade: ReviewGrade) => {
       if (!showAnswer || submitting) {
         return;
       }
-      setSelectedQuality(quality);
+      setSelectedGrade(grade);
     },
     [showAnswer, submitting],
   );
@@ -263,13 +267,13 @@ export default function App() {
               <div className="card__answer">{card.back}</div>
               {card.example && <div className="card__example">{card.example}</div>}
               <div className="quality-grid">
-                {QUALITY_OPTIONS.map((option) => (
+                {GRADE_OPTIONS.map((option) => (
                   <button
                     key={option.id}
                     className={`quality quality--${option.tone} ${
-                      selectedQuality === option.id ? "is-selected" : ""
+                      selectedGrade === option.id ? "is-selected" : ""
                     }`}
-                    onClick={() => handleQualitySelect(option.id)}
+                    onClick={() => handleGradeSelect(option.id)}
                     disabled={submitting}
                   >
                     <span className="quality__label">{option.label}</span>
@@ -277,7 +281,7 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <p className="quality__help">Press 1–4 to choose a response.</p>
+              <p className="quality__help">Press 0–5 to choose a response.</p>
             </>
           )}
         </div>

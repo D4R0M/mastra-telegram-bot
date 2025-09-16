@@ -1,4 +1,4 @@
-export type Quality = "again" | "hard" | "good" | "easy";
+export type ReviewGrade = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface PracticeCard {
   id: string;
@@ -49,7 +49,7 @@ export interface SubmitResponse {
 export interface SubmitPayload {
   sessionId?: string;
   cardId: string;
-  quality: Quality;
+  grade: ReviewGrade;
   elapsedMs: number;
   clientTs: number;
 }
