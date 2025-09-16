@@ -153,6 +153,28 @@ export async function processTelegramUpdate(
           { chatType },
         );
         commandHandled = "callback_practice_inline";
+      } else if (
+        data === "practice_learning" ||
+        data === "practice_new" ||
+        data === "practice_overdue"
+      ) {
+        const filterMap = {
+          practice_learning: "learning",
+          practice_new: "new",
+          practice_overdue: "overdue",
+        } as const;
+        const filter = filterMap[data as keyof typeof filterMap];
+        result = await processCommand(
+          `/practice inline ${filter}`,
+          userIdStr,
+          chatId,
+          existingState,
+          mastra,
+          expired,
+          username,
+          { chatType },
+        );
+        commandHandled = `callback_${data}`;
       } else if (data === "add_card") {
         result = await processCommand(
           "/add",

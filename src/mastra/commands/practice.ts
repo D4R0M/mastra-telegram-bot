@@ -9,6 +9,33 @@ import { getDueCardsTool, startReviewTool } from "../tools/reviewTools.js";
 const WEBAPP_ENABLED = process.env.WEBAPP_PRACTICE_ENABLED === "true";
 const PUBLIC_WEBAPP_URL = process.env.PUBLIC_WEBAPP_URL;
 
+type PracticeFilter = "learning" | "new" | "overdue";
+
+const PRACTICE_FILTERS: PracticeFilter[] = [
+  "learning",
+  "new",
+  "overdue",
+];
+
+function isPracticeFilter(value: string): value is PracticeFilter {
+  return (PRACTICE_FILTERS as ReadonlyArray<string>).includes(value);
+}
+
+const PRACTICE_FILTER_LABELS: Record<PracticeFilter, string> = {
+  learning: "Learning cards only",
+  new: "New cards only",
+  overdue: "Overdue cards only",
+};
+
+const PRACTICE_FILTER_EMPTY_MESSAGES: Record<PracticeFilter, string> = {
+  learning:
+    "🎉 No learning cards are due for review right now!\n\nTake a breather or run /practice to see everything that's due.",
+  new:
+    "🎉 No new cards are ready right now!\n\nAdd fresh vocabulary with <code>/add</code> or review due cards with /practice.",
+  overdue:
+    "🎉 Amazing! You have no overdue cards!\n\nKeep up the momentum with a regular /practice session.",
+};
+
 function buildWebAppUrl(): string | undefined {
   if (!PUBLIC_WEBAPP_URL) return undefined;
   const trimmed = PUBLIC_WEBAPP_URL.endsWith("/")
@@ -20,8 +47,15 @@ function buildWebAppUrl(): string | undefined {
 async function startInlinePractice(
   userId: string,
   mastra?: any,
+  options?: { filter?: PracticeFilter },
 ): Promise<CommandResponse> {
   const logger = mastra?.getLogger();
+  const filter = options?.filter;
+  const queue = filter === "learning" ? "learning" : filter === "new" ? "new" : undefined;
+  const overdueOnly = filter === "overdue";
+  const includeNewCards = filter
+    ? filter === "new"
+    : true;
 
   try {
     const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
@@ -31,7 +65,9 @@ async function startInlinePractice(
       context: {
         owner_id: userId,
         limit: 10,
-        include_new: true,
+        include_new: includeNewCards,
+        queue,
+        overdue_only: overdueOnly,
       },
       runtimeContext,
       tracingContext,
@@ -43,9 +79,11 @@ async function startInlinePractice(
       !dueResult.cards ||
       dueResult.cards.length === 0
     ) {
+      const emptyMessage = filter
+        ? PRACTICE_FILTER_EMPTY_MESSAGES[filter]
+        : "🎉 No cards are due for review right now!\n\nYour vocabulary is all up to date. Come back later or add new cards with <code>/add</code>.";
       return {
-        response:
-          "🎉 No cards are due for review right now!\n\nYour vocabulary is all up to date. Come back later or add new cards with <code>/add</code>.",
+        response: emptyMessage,
         parse_mode: "HTML",
       };
     }
@@ -75,8 +113,11 @@ async function startInlinePractice(
       };
       const currentIndex = 1;
       const totalCards = dueResult.cards.length;
+      const filterLine = filter
+        ? `\n🎯 Filter: ${PRACTICE_FILTER_LABELS[filter]}`
+        : "";
       return {
-        response: `📚 <b>Review Session Started!</b>\nCards in session: ${totalCards}\n\n<b>Card ${currentIndex}/${totalCards}</b>\n\n❓ <b>${card.front}</b>\n\n<i>Try to recall the answer, then type your response or type "show" to reveal.</i>`,
+        response: `📚 <b>Review Session Started!</b>\nCards in session: ${totalCards}${filterLine}\n\n<b>Card ${currentIndex}/${totalCards}</b>\n\n❓ <b>${card.front}</b>\n\n<i>Try to recall the answer, then type your response or type "show" to reveal.</i>`,
         conversationState: {
           mode: "review_session",
           step: 1,
@@ -88,6 +129,7 @@ async function startInlinePractice(
             all_cards: dueResult.cards,
             start_time: startResult.start_time,
             correct_streak: 0,
+            filter,
           },
         },
         parse_mode: "HTML",
@@ -115,16 +157,21 @@ export default async function handlePracticeCommand(
   mastra?: any,
   commandContext?: CommandContext,
 ): Promise<CommandResponse> {
-  const forceInline = params.some(
-    (param) => typeof param === "string" && param.toLowerCase() === "inline",
-  );
+  const normalizedParams = params
+    .filter((param): param is string => typeof param === "string")
+    .map((param) => param.toLowerCase());
+
+  const filter = normalizedParams.find(isPracticeFilter);
+
+  const forceInline = normalizedParams.includes("inline");
+  const shouldForceInline = forceInline || !!filter;
 
   const webAppUrl = buildWebAppUrl();
   const webAppEnabled = WEBAPP_ENABLED && !!webAppUrl;
   const chatType = commandContext?.chatType;
   const isPrivate = chatType ? chatType === "private" : true;
 
-  if (webAppEnabled && isPrivate && !forceInline) {
+  if (webAppEnabled && isPrivate && !shouldForceInline) {
     return {
       response: [
         "🧠 <b>Practice in chat</b>",
@@ -151,5 +198,5 @@ export default async function handlePracticeCommand(
     };
   }
 
-  return startInlinePractice(userId, mastra);
+  return startInlinePractice(userId, mastra, { filter });
 }

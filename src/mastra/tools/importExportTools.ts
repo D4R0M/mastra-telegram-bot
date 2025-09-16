@@ -347,7 +347,9 @@ export const exportCSVTool = createTool({
     try {
       let cards;
       if (context.due_only) {
-        const dueData = await getDueCards(context.owner_id, context.limit);
+        const dueData = await getDueCards(context.owner_id, {
+          limit: context.limit,
+        });
         cards = dueData.map((d) => d.card);
         if (context.tags_filter && context.tags_filter.length > 0) {
           cards = cards.filter((c: any) =>
