@@ -95,7 +95,7 @@ export const sendTelegramResponseStep = createStep({
       let response: Response;
       try {
         response = await fetch(telegramApiUrl, {
-          method: "POST",
+      method: "POST" as const,
           headers: {
             "Content-Type": "application/json",
           },
@@ -168,7 +168,7 @@ export const vocabularyWorkflow = createWorkflow({
       .string()
       .describe("Unique thread identifier for conversation context"),
     owner_id: z
-      .coerce.number()
+      .string()
       .describe("User ID for personalization and data access"),
     chatId: z.string().describe("Telegram chat ID to send the response to"),
     messageId: z

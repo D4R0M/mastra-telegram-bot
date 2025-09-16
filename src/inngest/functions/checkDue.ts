@@ -1,14 +1,12 @@
 import { inngest } from "../../mastra/inngest/client.js";
-import { onSchedule } from "../onSchedule.js";
 import { getPool } from "../../db/client.js";
 import { isAuthorizedTelegramUser } from "../../mastra/authorization.js";
 import { sendTelegramMessage } from "../../telegram/sendMessage.js";
+import type { StepTools } from "inngest";
 
-export const checkDue = onSchedule(
-  inngest,
-  "check-due",
-  "*/2 * * * *",
-  async ({ step }) => {
+export const checkDue = inngest.createFunction(
+  { id: "check-due", cron: "*/2 * * * *" },
+  async ({ step }: { step: StepTools }) => {
     const pool = getPool();
     const { rows } = await step.run("fetch due users", () =>
       pool.query(

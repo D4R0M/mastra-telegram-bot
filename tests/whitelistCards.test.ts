@@ -5,10 +5,10 @@ vi.mock('../src/mastra/authorization.ts', () => ({
 }));
 import { whitelistMiddleware } from '../src/telegram/whitelistMiddleware.ts';
 
-const TEST_TG_ID = 6776842238;
+const TEST_TG_ID = "6776842238";
 
 vi.mock('../src/db/cards.ts', () => ({
-  getCardsByOwner: vi.fn(async (owner_id: number) => {
+  getCardsByOwner: vi.fn(async (owner_id: string) => {
     if (owner_id === TEST_TG_ID) {
       return [
         {
@@ -37,7 +37,7 @@ const mockedGetCards = getCardsByOwner as any;
 
 describe('whitelist middleware user id handling', () => {
   it('queries cards using telegram user id', async () => {
-    const ctx: any = { from: { id: TEST_TG_ID }, chat: { id: 1 }, state: { user: { id: '1', user_id: TEST_TG_ID } } };
+    const ctx: any = { from: { id: Number(TEST_TG_ID) }, chat: { id: 1 }, state: { user: { id: '1', user_id: TEST_TG_ID } } };
     await whitelistMiddleware(ctx, async () => {});
     const res = await handleListCommand([], '', ctx.state.tgUserId);
     expect(mockedGetCards).toHaveBeenCalledWith(TEST_TG_ID, expect.any(Object));

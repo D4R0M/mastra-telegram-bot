@@ -36,7 +36,7 @@ vi.mock("../src/db/userWhitelist.js", () => ({
       note: data.note ?? null,
     });
   }),
-  removeWhitelistUser: vi.fn(async (userId: number) => {
+  removeWhitelistUser: vi.fn(async (userId: string) => {
     whitelistStore.entries.delete(String(userId));
   }),
   listWhitelist: vi.fn(async () => Array.from(whitelistStore.entries.values())),

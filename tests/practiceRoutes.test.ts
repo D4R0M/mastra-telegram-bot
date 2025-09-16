@@ -137,8 +137,8 @@ describe("practice routes", () => {
   });
 
   it("serves next card and records submissions", async () => {
-    const userId = 101;
-    const initData = signedInitData({ id: userId, username: "tester" });
+    const userId = "101";
+    const initData = signedInitData({ id: Number(userId), username: "tester" });
 
     mocks.getDueCardsExecute.mockResolvedValueOnce({
       success: true,

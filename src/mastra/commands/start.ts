@@ -16,7 +16,7 @@ export default async function handleStartCommand(
       const token = process.env.TELEGRAM_BOT_TOKEN;
       if (token) {
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
+          method: "POST" as const,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: entry.adminId,

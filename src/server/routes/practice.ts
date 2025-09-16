@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { requireTelegramWebAppAuth } from "../webappInit.js";
 import { buildToolExecCtx } from "../../mastra/context.js";
+import type { ID } from "../../types/ids.js";
 import {
   getDueCardsTool,
   startReviewTool,
@@ -35,7 +36,7 @@ function takeRateLimitToken(key: string): boolean {
   return true;
 }
 
-function computeUserHash(botId: string | undefined, userId: number) {
+function computeUserHash(botId: string | undefined, userId: ID) {
   const prefix = botId && botId.length > 0 ? botId : "bot";
   return createHash("sha256")
     .update(`${prefix}:${userId}`)
@@ -67,7 +68,7 @@ function resolveGrade(quality: unknown): number | undefined {
 
 async function fetchDueCount(
   mastra: any,
-  userId: number,
+  userId: ID,
 ): Promise<number> {
   try {
     const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
@@ -95,7 +96,7 @@ async function fetchDueCount(
 export function createPracticeNextHandler(mastra: any): Handler {
   return requireTelegramWebAppAuth(async (c, auth) => {
     const logger = mastra?.getLogger?.();
-    const userId = auth.tgUser.id;
+    const userId: ID = String(auth.tgUser.id);
     const requestId = `${userId}`;
     const sessionId =
       c.req.query("sessionId") || `practice_${userId}_${Date.now()}`;
@@ -196,7 +197,7 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
   return requireTelegramWebAppAuth(async (c, auth) => {
     const logger = mastra?.getLogger?.();
     const receivedAt = Date.now();
-    const userId = auth.tgUser.id;
+    const userId: ID = String(auth.tgUser.id);
     const userKey = String(userId);
 
     try {
