@@ -5,6 +5,7 @@ import type {
 } from "../commandTypes.js";
 import { buildToolExecCtx } from "../context.js";
 import { getDueCardsTool, startReviewTool } from "../tools/reviewTools.js";
+import { getUserSettingsTool } from "../tools/settingsTools.js";
 
 const WEBAPP_ENABLED = process.env.WEBAPP_PRACTICE_ENABLED === "true";
 const PUBLIC_WEBAPP_URL = process.env.PUBLIC_WEBAPP_URL;
@@ -53,18 +54,58 @@ async function startInlinePractice(
   const filter = options?.filter;
   const queue = filter === "learning" ? "learning" : filter === "new" ? "new" : undefined;
   const overdueOnly = filter === "overdue";
-  const includeNewCards = filter
-    ? filter === "new"
-    : true;
+  let includeNewCards: boolean | undefined;
+  if (filter === "new") {
+    includeNewCards = true;
+  } else if (filter) {
+    includeNewCards = false;
+  }
+  let sessionSize = 10;
 
   try {
+    try {
+      const {
+        runtimeContext: settingsRuntimeContext,
+        tracingContext: settingsTracingContext,
+      } = buildToolExecCtx(mastra, { requestId: userId });
+      const settingsResult = await getUserSettingsTool.execute({
+        context: { user_id: userId },
+        runtimeContext: settingsRuntimeContext,
+        tracingContext: settingsTracingContext,
+        mastra,
+      });
+
+      if (settingsResult.success && settingsResult.settings) {
+        sessionSize = settingsResult.settings.session_size ?? sessionSize;
+        if (includeNewCards === undefined) {
+          includeNewCards = settingsResult.settings.daily_new_limit > 0;
+        }
+      } else if (includeNewCards === undefined) {
+        includeNewCards = true;
+      }
+    } catch (settingsError) {
+      logger?.warn?.("practice_settings_fetch_failed", {
+        error:
+          settingsError instanceof Error
+            ? settingsError.message
+            : String(settingsError),
+      });
+      if (includeNewCards === undefined) {
+        includeNewCards = true;
+      }
+    }
+
+    if (includeNewCards === undefined) {
+      includeNewCards = true;
+    }
+
     const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
       requestId: userId,
     });
     const dueResult = await getDueCardsTool.execute({
       context: {
         owner_id: userId,
-        limit: 10,
+        limit: sessionSize,
         include_new: includeNewCards,
         queue,
         overdue_only: overdueOnly,
