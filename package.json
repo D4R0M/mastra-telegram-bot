@@ -5,7 +5,8 @@
   "scripts": {
     "test": "vitest run",
     "dev": "mastra dev",
-    "build": "mastra build",
+    "webapp:build": "npm --prefix webapp install --no-package-lock --no-save && npm --prefix webapp run build",
+    "build": "npm run webapp:build && mastra build",
     "start": "node --import=./.mastra/output/instrumentation.mjs .mastra/output/index.mjs",
     "check": "tsc",
     "check:format": "prettier --check '**/*.ts'",
