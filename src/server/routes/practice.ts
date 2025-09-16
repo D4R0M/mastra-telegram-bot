@@ -1,4 +1,7 @@
 import { createHash } from "crypto";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
+
 import { requireTelegramWebAppAuth } from "../webappInit.js";
 import { buildToolExecCtx } from "../../mastra/context.js";
 import {
@@ -9,6 +12,136 @@ import {
 import { getDueCardsStatsTool } from "../../mastra/tools/statisticsTools.js";
 
 type Handler = (c: any) => Promise<any>;
+
+type PracticeWebAppHandlerOptions = {
+  distPath?: string;
+};
+
+const DEFAULT_PRACTICE_DIST = path.resolve(process.cwd(), "webapp", "dist");
+
+const MIME_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".gif": "image/gif",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    const stats = await stat(filePath);
+    return stats.isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isWithinDir(dir: string, target: string): boolean {
+  const relative = path.relative(dir, target);
+  return !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function cacheControlForExt(ext: string): string {
+  if (ext === ".html") {
+    return "no-cache";
+  }
+  if (ext === ".map") {
+    return "no-store";
+  }
+  return "public, max-age=31536000, immutable";
+}
+
+export function createPracticeWebAppHandler(
+  options: PracticeWebAppHandlerOptions = {},
+): Handler {
+  const distRoot = path.resolve(options.distPath ?? DEFAULT_PRACTICE_DIST);
+  const indexPath = path.join(distRoot, "index.html");
+
+  return async (c) => {
+    const logger = c?.get?.("mastra")?.getLogger?.();
+
+    if (!(await fileExists(indexPath))) {
+      logger?.error?.("practice_webapp_missing_assets", {
+        indexPath,
+      });
+      return c.text(
+        "Practice WebApp assets missing. Build the webapp with `npm --prefix webapp run build` before deploying.",
+        503,
+      );
+    }
+
+    const requestUrl = new URL(c.req.url);
+    const incomingPath =
+      typeof c.req?.path === "string" && c.req.path.length > 0
+        ? c.req.path
+        : requestUrl.pathname;
+
+    if (!incomingPath.startsWith("/practice")) {
+      return c.text("Not found", 404);
+    }
+
+    let relativePath = incomingPath.replace(/^\/practice/, "");
+    if (!relativePath || relativePath === "/") {
+      relativePath = "/index.html";
+    }
+
+    const strippedRelative = relativePath.startsWith("/")
+      ? relativePath.slice(1)
+      : relativePath;
+    let candidatePath = path.resolve(distRoot, strippedRelative);
+
+    const within = isWithinDir(distRoot, candidatePath);
+    if (!within) {
+      return c.text("Not found", 404);
+    }
+
+    let servePath = candidatePath;
+    let stats;
+    try {
+      stats = await stat(candidatePath);
+    } catch (error) {
+      if (strippedRelative.startsWith("assets/")) {
+        logger?.warn?.("practice_webapp_asset_missing", {
+          asset: strippedRelative,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return c.text("Not found", 404);
+      }
+      servePath = indexPath;
+    }
+
+    if (stats?.isDirectory()) {
+      servePath = indexPath;
+    }
+
+    try {
+      const data = await readFile(servePath);
+      const ext = path.extname(servePath).toLowerCase() || ".html";
+      const headers: Record<string, string> = {
+        "Content-Type": MIME_TYPES[ext] ?? "application/octet-stream",
+        "Cache-Control": cacheControlForExt(ext),
+      };
+      return c.body(data, 200, headers);
+    } catch (error) {
+      logger?.error?.("practice_webapp_serve_failed", {
+        path: servePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.text("Practice WebApp unavailable", 500);
+    }
+  };
+}
 
 type RateLimitBucket = {
   count: number;
