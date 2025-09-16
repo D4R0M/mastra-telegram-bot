@@ -53,7 +53,7 @@ export default async function handleDueCommand(
             [
               { text: "▶️ Start Practice", callback_data: "practice_now" },
               { text: "➕ Add Card", callback_data: "add_card" },
-              { text: "📂 Export", callback_data: "export_cards" },
+              { text: "📂 Export", callback_data: "export:cards" },
             ],
             [
               { text: "📖 Only Learning", callback_data: "practice_learning" },

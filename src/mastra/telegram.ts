@@ -187,6 +187,18 @@ export async function processTelegramUpdate(
           { chatType },
         );
         commandHandled = "callback_add_card";
+      } else if (data === "export_cards" || data === "export:cards") {
+        result = await processCommand(
+          "/export_cards",
+          userIdStr,
+          chatId,
+          existingState,
+          mastra,
+          expired,
+          username,
+          { chatType },
+        );
+        commandHandled = "callback_export_cards";
       } else if (data === "open_stats_detail") {
         result = {
           response: "Coming soon: daily breakdown & tag analytics.",
