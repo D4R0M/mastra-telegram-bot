@@ -1,17 +1,9 @@
 import { inngest } from "../mastra/inngest/client.js";
 
-type ReminderContext = {
-  step: {
-    run: <TReturn>(
-      name: string,
-      handler: () => Promise<TReturn> | TReturn,
-    ) => Promise<TReturn>;
-  };
-  logger: {
-    info: (message: string, ...args: unknown[]) => void;
-  };
-};
-
+/**
+ * Scheduled reminder workflow
+ * Logs [ReminderWorkflow] and a step [CheckReminderTime] so we can verify scheduling.
+ */
 export const checkReminders = inngest.createFunction(
   {
     id: "check-reminders",
@@ -23,7 +15,7 @@ export const checkReminders = inngest.createFunction(
       },
     ],
   },
-  async ({ step, logger }: ReminderContext) => {
+  async ({ step, logger }) => {
     logger.info("[ReminderWorkflow] scheduled reminder check started");
 
     const result = await step.run("CheckReminderTime", async () => {
@@ -35,7 +27,7 @@ export const checkReminders = inngest.createFunction(
     });
 
     return result;
-  },
+  }
 );
 
 export default checkReminders;

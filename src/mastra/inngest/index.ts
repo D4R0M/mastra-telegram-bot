@@ -24,6 +24,7 @@ export function createWorkflow(
 // Export the Inngest client and workflow helpers
 export { inngest, cloneStep };
 
+// IMPORTANT: Only export functions that have a trigger (cron or event)
 const inngestFunctions: InngestFunction.Any[] = [checkReminders];
 
 // Create a middleware for Inngest to be able to route triggers to Mastra directly.
