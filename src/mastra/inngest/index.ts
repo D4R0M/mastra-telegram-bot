@@ -4,7 +4,7 @@ import { registerApiRoute as originalRegisterApiRoute } from "@mastra/core/serve
 import { type Mastra } from "@mastra/core";
 import { type Inngest, InngestFunction, NonRetriableError } from "inngest";
 import { serve as originalInngestServe } from "inngest/hono";
-import { checkDue } from "../../inngest/functions/checkDue.js";
+import { checkReminders } from "../../inngest/reminder.js";
 
 // Initialize Inngest with Mastra to get Inngest-compatible workflow helpers
 const { createWorkflow: originalCreateWorkflow, cloneStep } = init(inngest);
@@ -24,7 +24,7 @@ export function createWorkflow(
 // Export the Inngest client and workflow helpers
 export { inngest, cloneStep };
 
-const inngestFunctions: InngestFunction.Any[] = [checkDue];
+const inngestFunctions: InngestFunction.Any[] = [checkReminders];
 
 // Create a middleware for Inngest to be able to route triggers to Mastra directly.
 export function registerApiRoute<P extends string>(
@@ -126,5 +126,6 @@ export function inngestServe({
     client: inngest,
     functions: Array.from(functions),
     serveHost,
+    signingKey: process.env.INNGEST_SIGNING_KEY,
   });
 }
