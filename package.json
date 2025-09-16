@@ -5,7 +5,9 @@
   "scripts": {
     "test": "vitest run",
     "dev": "mastra dev",
-    "build": "mastra build",
+    "build:webapp": "vite build --config webapp/vite.config.ts",
+    "preview:webapp": "vite preview --config webapp/vite.config.ts --strictPort --port 4173",
+    "build": "tsc -p . && mastra build && npm run build:webapp",
     "start": "node --import=./.mastra/output/instrumentation.mjs .mastra/output/index.mjs",
     "check": "tsc",
     "check:format": "prettier --check '**/*.ts'",

@@ -31,6 +31,9 @@ function qualityLabel(quality: Quality) {
   return QUALITY_OPTIONS.find((option) => option.id === quality)?.label || "Submit";
 }
 
+const TELEGRAM_HINT_MESSAGE =
+  "Open this practice session from Telegram to sync your progress.";
+
 export default function App() {
   const [card, setCard] = useState<PracticeCard | null>(null);
   const sessionRef = useRef<string | null>(null);
@@ -45,6 +48,12 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(
     null,
   );
+  const [telegramAvailable, setTelegramAvailable] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return Boolean(window.Telegram?.WebApp);
+  });
 
   const completed = useMemo(() => {
     if (!totalDue) return 0;
@@ -65,6 +74,10 @@ export default function App() {
     const timeout = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    setTelegramAvailable(Boolean(window.Telegram?.WebApp));
+  }, []);
 
   const loadNextCard = useCallback(async (overrideSession?: string | null) => {
     try {
@@ -143,12 +156,17 @@ export default function App() {
   }, [card, selectedQuality, submitting, remainingDue, startTime, loadNextCard, showToast]);
 
   useEffect(() => {
-    initTelegram(() => window.Telegram?.WebApp?.close());
-    loadNextCard();
+    initTelegram(() => window.Telegram?.WebApp?.close?.());
+    if (telegramAvailable) {
+      loadNextCard();
+    } else {
+      setLoading(false);
+      setError(TELEGRAM_HINT_MESSAGE);
+    }
     return () => {
       teardownTelegram();
     };
-  }, [loadNextCard]);
+  }, [loadNextCard, telegramAvailable]);
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -197,6 +215,11 @@ export default function App() {
 
   return (
     <div className="app">
+      {!telegramAvailable && (
+        <div className="app__notice" role="status">
+          <strong>Open from Telegram.</strong> {TELEGRAM_HINT_MESSAGE}
+        </div>
+      )}
       <header className="app__header">
         <div>
           <h1>Practice</h1>
@@ -216,9 +239,13 @@ export default function App() {
       {error && (
         <div className="error">
           <p>{error}</p>
-          <button className="secondary" onClick={retry}>
-            Try again
-          </button>
+          {telegramAvailable ? (
+            <button className="secondary" onClick={retry}>
+              Try again
+            </button>
+          ) : (
+            <p className="error__hint">Use the Mastra Telegram bot to launch this WebApp.</p>
+          )}
         </div>
       )}
 
