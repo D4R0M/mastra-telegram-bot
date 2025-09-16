@@ -2,6 +2,9 @@ import "dotenv/config";
 import { Mastra } from "@mastra/core";
 import { MastraError } from "@mastra/core/error";
 import { PinoLogger } from "@mastra/loggers";
+import path from "path";
+import fs from "fs/promises";
+import { fileURLToPath } from "url";
 
 // Production startup validation for required environment variables
 if (process.env.NODE_ENV === "production") {
@@ -109,6 +112,43 @@ class ProductionPinoLogger extends MastraLogger {
 
 const practiceRoutesEnabled = process.env.WEBAPP_PRACTICE_ENABLED === "true";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let practiceDistDir: string | null = null;
+let practiceIndexFile: string | null = null;
+
+if (practiceRoutesEnabled) {
+  const candidates = [
+    path.resolve(__dirname, "../webapp/dist"),
+    path.resolve(__dirname, "../../webapp/dist"),
+    path.resolve(process.cwd(), "webapp/dist"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const stats = await fs.stat(candidate);
+      if (stats.isDirectory()) {
+        practiceDistDir = candidate;
+        practiceIndexFile = path.join(candidate, "index.html");
+        break;
+      }
+    } catch {
+      // ignore missing candidates
+    }
+  }
+
+  if (!practiceDistDir) {
+    console.warn(
+      "⚠️ [Practice WebApp] Unable to locate built assets. Run `npm run build:webapp` before serving static files.",
+    );
+  }
+}
+
+const practiceStaticMiddleware = practiceRoutesEnabled
+  ? createPracticeStaticMiddleware(practiceDistDir, practiceIndexFile)
+  : null;
+
 const telegramOriginPatterns = [
   /^https:\/\/[a-z0-9.-]+\.telegram\.org$/i,
   /^https:\/\/telegram\.org$/i,
@@ -136,6 +176,117 @@ function isAllowedOrigin(origin?: string | null): boolean {
     return true;
   }
   return telegramOriginPatterns.some((pattern) => pattern.test(origin));
+}
+
+const STATIC_MIME_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".webmanifest": "application/manifest+json",
+};
+
+function createPracticeStaticMiddleware(
+  distDir: string | null,
+  indexFile: string | null,
+) {
+  if (!distDir || !indexFile) {
+    return async (_ctx: any, next: () => Promise<void>) => {
+      await next();
+    };
+  }
+
+  const normalizedDist = path.resolve(distDir);
+  const fallbackIndex = path.resolve(indexFile);
+
+  return async (ctx: any, next: () => Promise<void>) => {
+    const method = ctx.req.method?.toUpperCase?.() ?? ctx.req.method;
+    if (method !== "GET" && method !== "HEAD") {
+      await next();
+      return;
+    }
+
+    let pathname: string;
+    try {
+      pathname = new URL(ctx.req.url).pathname;
+    } catch {
+      await next();
+      return;
+    }
+
+    if (!pathname.startsWith("/practice")) {
+      await next();
+      return;
+    }
+
+    let relativePath = pathname.slice("/practice".length);
+    if (relativePath.startsWith("/")) {
+      relativePath = relativePath.slice(1);
+    }
+
+    try {
+      relativePath = decodeURIComponent(relativePath);
+    } catch {
+      return ctx.newResponse("Bad Request", { status: 400 });
+    }
+
+    let targetPath = fallbackIndex;
+    if (relativePath.length > 0) {
+      const resolvedCandidate = path.resolve(normalizedDist, relativePath);
+      const relativeToDist = path.relative(normalizedDist, resolvedCandidate);
+      if (relativeToDist.startsWith("..") || path.isAbsolute(relativeToDist)) {
+        return ctx.newResponse("Not Found", { status: 404 });
+      }
+
+      try {
+        const stats = await fs.stat(resolvedCandidate);
+        if (stats.isDirectory()) {
+          targetPath = path.join(resolvedCandidate, "index.html");
+        } else {
+          targetPath = resolvedCandidate;
+        }
+      } catch {
+        targetPath = fallbackIndex;
+      }
+    }
+
+    try {
+      const file = await fs.readFile(targetPath);
+      const ext = path.extname(targetPath).toLowerCase();
+      const headers = new Headers();
+      headers.set(
+        "Content-Type",
+        STATIC_MIME_TYPES[ext] || "application/octet-stream",
+      );
+      if (ext === ".html") {
+        headers.set("Cache-Control", "no-cache");
+      } else {
+        headers.set("Cache-Control", "public, max-age=31536000, immutable");
+      }
+
+      if (method === "HEAD") {
+        return ctx.newResponse(null, { status: 200, headers });
+      }
+
+      return ctx.newResponse(file, { status: 200, headers });
+    } catch {
+      await next();
+    }
+  };
 }
 
 const corsMiddleware = async (c: any, next: () => Promise<void>) => {
@@ -179,6 +330,10 @@ const corsMiddleware = async (c: any, next: () => Promise<void>) => {
   }
   if (origin) {
     appendVaryOrigin();
+    c.res.headers.set(
+      "Access-Control-Allow-Headers",
+      "Content-Type, X-Telegram-Init-Data",
+    );
   }
 };
 
@@ -251,6 +406,7 @@ export const mastra = new Mastra({
     port: parseInt(process.env.PORT || "3000"),
     middleware: [
       corsMiddleware,
+      ...(practiceStaticMiddleware ? [practiceStaticMiddleware] : []),
       async (c, next) => {
         const mastra = c.get("mastra");
         const logger = mastra?.getLogger();
