@@ -17,6 +17,7 @@ import {
   updateAlgorithmSettingsTool,
 } from "./tools/settingsTools.js";
 import { updateReminderSettingsTool } from "./tools/reminderTools.js";
+import { parseReminderTimesInput } from "./utils/reminderTime.js";
 import { clearConversationState } from "./conversationStateStorage.js";
 
 export type { CommandResponse, ConversationState, CommandContext } from "./commandTypes.js";
@@ -1091,18 +1092,17 @@ async function handleSettingsMenuFlow(
   }
 
   if (state.step === 2 && action === "reminder_times") {
-    const times = input
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    const regex = /^\d{2}:\d{2}$/;
-    if (times.length === 0 || times.some((t) => !regex.test(t))) {
+    const parsedTimes = parseReminderTimesInput(input);
+
+    if (!parsedTimes.success) {
       return {
-        response: "❌ Please enter times in HH:MM format, separated by commas",
+        response: `❌ ${parsedTimes.error}`,
         conversationState: state,
         parse_mode: "HTML",
       };
     }
+
+    const times = parsedTimes.times;
 
     try {
       const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
@@ -1111,7 +1111,7 @@ async function handleSettingsMenuFlow(
       const result = await updateReminderSettingsTool.execute({
         context: {
           user_id: userId,
-          reminder_times: times,
+          preferred_times: times,
         },
         runtimeContext,
         tracingContext,
@@ -1552,7 +1552,7 @@ export async function handleSettingsCallback(
           ? current.settings.reminder_times.join(", ")
           : "";
       return {
-        response: `⏰ Enter reminder times (HH:MM, comma-separated). Current: ${times}`,
+        response: `⏰ Enter reminder hours (HH or HH:MM, comma-separated). Current: ${times}`,
         conversationState: {
           mode: "settings_menu",
           step: 2,
