@@ -74,6 +74,14 @@ export interface CreateReviewLogData {
   direction?: string;
 }
 
+export type ReviewQueueType = ReviewState["queue"];
+
+export interface GetDueCardsOptions {
+  limit?: number;
+  queue?: ReviewQueueType;
+  onlyOverdue?: boolean;
+}
+
 export async function createReviewState(
   data: CreateReviewStateData,
   client?: PoolClient,
@@ -222,12 +230,13 @@ export async function updateReviewState(
 
 export async function getDueCards(
   user_id: number,
-  limit?: number,
+  options: GetDueCardsOptions = {},
   client?: PoolClient,
 ): Promise<Array<{ card: any; review_state: ReviewState }>> {
   const pool = client || getPool();
 
   const today = new Date().toISOString().split("T")[0];
+  const { limit, queue, onlyOverdue } = options;
 
   let query = `
     SELECT c.*, rs.*
@@ -235,14 +244,22 @@ export async function getDueCards(
     INNER JOIN cards c ON c.id = rs.card_id
     WHERE rs.user_id = $1
       AND c.active = true
-      AND rs.due_date <= $2
-    ORDER BY rs.due_date ASC, c.created_at ASC
+      AND rs.due_date ${onlyOverdue ? "<" : "<="} $2
   `;
 
   const params: (number | string)[] = [user_id, today];
+  let paramIndex = 3;
+
+  if (queue) {
+    query += ` AND rs.queue = $${paramIndex}`;
+    params.push(queue);
+    paramIndex += 1;
+  }
+
+  query += ` ORDER BY rs.due_date ASC, c.created_at ASC`;
 
   if (limit) {
-    query += ` LIMIT $3`;
+    query += ` LIMIT $${paramIndex}`;
     params.push(limit);
   }
 

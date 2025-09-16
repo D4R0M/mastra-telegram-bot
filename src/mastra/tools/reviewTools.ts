@@ -43,6 +43,14 @@ export const getDueCardsTool = createTool({
       .boolean()
       .default(true)
       .describe("Whether to include new cards that haven't been reviewed yet"),
+    queue: z
+      .enum(["new", "learning", "review"])
+      .optional()
+      .describe("Only return cards from this queue"),
+    overdue_only: z
+      .boolean()
+      .default(false)
+      .describe("Only return cards with due dates before today"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -75,7 +83,12 @@ export const getDueCardsTool = createTool({
     try {
       // Get due cards that already have review states
       logger?.info("📝 [GetDueCards] Fetching due cards from database...");
-      const dueCardsData = await getDueCards(context.owner_id, context.limit);
+    const limit = context.limit ?? 10;
+    const dueCardsData = await getDueCards(context.owner_id, {
+      limit,
+      queue: context.queue,
+      onlyOverdue: context.overdue_only,
+    });
 
       const dueCards = dueCardsData.map((item) => ({
         card_id: item.card.id,
@@ -94,12 +107,17 @@ export const getDueCardsTool = createTool({
 
       // If we need more cards and include_new is true, get new cards without review states
       let newCards: any[] = [];
-      if (context.include_new && dueCards.length < context.limit) {
+      const shouldIncludeNewCards =
+        context.include_new &&
+        (!context.queue || context.queue === "new") &&
+        !context.overdue_only;
+
+      if (shouldIncludeNewCards && dueCards.length < limit) {
         logger?.info(
           "📝 [GetDueCards] Need more cards, fetching new cards without review states...",
         );
 
-        const remaining = context.limit - dueCards.length;
+        const remaining = limit - dueCards.length;
         const { getCardsByOwner } = await import("../../db/cards.js");
 
         // Get candidate cards and fetch existing review states in batch
