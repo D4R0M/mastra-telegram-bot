@@ -22,7 +22,7 @@ export interface NextCardResponse {
   serverTime?: number;
   done?: boolean;
   user?: {
-    id: number;
+    id: string;
     username?: string;
     firstName?: string;
   };

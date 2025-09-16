@@ -24,7 +24,10 @@ export function createWorkflow(
 // Export the Inngest client and workflow helpers
 export { inngest, cloneStep };
 
-const inngestFunctions: InngestFunction.Any[] = [checkDue];
+const inngestFunctions: InngestFunction.Any[] = [];
+if (process.env.REMINDERS_ENABLED === "true") {
+  inngestFunctions.push(checkDue);
+}
 
 // Create a middleware for Inngest to be able to route triggers to Mastra directly.
 export function registerApiRoute<P extends string>(

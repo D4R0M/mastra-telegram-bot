@@ -6,7 +6,8 @@ export interface ConversationState {
     | "import_csv"
     | "settings_menu"
     | "filter_cards"
-    | "export_csv";
+    | "export_csv"
+    | "list_view";
   step?: number;
   data?: any;
   lastMessageTime?: number;

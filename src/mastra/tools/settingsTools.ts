@@ -2,13 +2,14 @@ import { createTool } from "@mastra/core/tools";
 import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
 import { getPool } from "../../db/client";
+import type { ID } from "../../types/ids.js";
 
 // ===============================
 // Types for Settings Management
 // ===============================
 
 interface UserSettings {
-  user_id: number;
+  user_id: ID;
   chat_id: string;
   timezone: string;
   dnd_start: string;
@@ -50,7 +51,7 @@ export const getUserSettingsTool = createTool({
   id: "get-user-settings-tool",
   description: `Get all user settings including session preferences, daily limits, reminder settings, and algorithm configuration`,
   inputSchema: z.object({
-    user_id: z.coerce.number().describe("User identifier"),
+    user_id: z.string().describe("User identifier"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -224,7 +225,7 @@ export const updateSessionSettingsTool = createTool({
   id: "update-session-settings-tool",
   description: `Update session-related settings including session size, daily limits for new and review cards`,
   inputSchema: z.object({
-    user_id: z.coerce.number().describe("User identifier"),
+    user_id: z.string().describe("User identifier"),
     session_size: z.number().min(1).max(100).optional().describe("Number of cards per review session (1-100)"),
     daily_new_limit: z.number().min(0).max(1000).optional().describe("Maximum new cards per day (0-1000)"),
     daily_review_limit: z.number().min(0).max(1000).optional().describe("Maximum review cards per day (0-1000)"),
@@ -337,7 +338,7 @@ export const updateAlgorithmSettingsTool = createTool({
   id: "update-algorithm-settings-tool",
   description: `Update spaced repetition algorithm settings and preferences`,
   inputSchema: z.object({
-    user_id: z.coerce.number().describe("User identifier"),
+    user_id: z.string().describe("User identifier"),
     algorithm: z.enum(['sm2']).optional().describe("Spaced repetition algorithm (currently only 'sm2' supported)"),
     locale: z.string().optional().describe("User interface language preference (e.g., 'en', 'sv', 'de')"),
   }),
@@ -442,7 +443,7 @@ export const updateReminderSettingsAdvancedTool = createTool({
   id: "update-reminder-settings-advanced-tool",
   description: `Update reminder settings including enabled status, reminder times, do not disturb periods, and timezone`,
   inputSchema: z.object({
-    user_id: z.coerce.number().describe("User identifier"),
+    user_id: z.string().describe("User identifier"),
     reminders_enabled: z.boolean().optional().describe("Whether reminders are enabled"),
     reminder_times: z.array(z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/)).optional().describe("List of reminder times in HH:MM format"),
     dnd_start: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).optional().describe("Do not disturb start time in HH:MM format"),
@@ -589,7 +590,7 @@ export const resetSettingsTool = createTool({
   id: "reset-settings-tool",
   description: `Reset user settings to default values, optionally preserving certain categories`,
   inputSchema: z.object({
-    user_id: z.coerce.number().describe("User identifier"),
+    user_id: z.string().describe("User identifier"),
     preserve_reminders: z.boolean().default(false).describe("Whether to preserve current reminder settings"),
     preserve_session: z.boolean().default(false).describe("Whether to preserve current session settings"),
     preserve_algorithm: z.boolean().default(false).describe("Whether to preserve current algorithm settings"),

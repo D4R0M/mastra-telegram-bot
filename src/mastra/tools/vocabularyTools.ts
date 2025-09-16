@@ -3,13 +3,14 @@ import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
 import { createCard, getCardsByOwner, getCardById, updateCard, deleteCard } from "../../db/cards.js";
 import type { CreateCardData, UpdateCardData } from "../../db/cards.js";
+import type { ID } from "../../types/ids.js";
 
 // Add card tool with guided flow
 export const addCardTool = createTool({
   id: "add-card-tool",
   description: `Add a new vocabulary card to the collection. Supports both guided interactive flow and quick-add syntax parsing.`,
   inputSchema: z.object({
-    owner_id: z.coerce.number().describe("User ID who owns the card"),
+    owner_id: z.string().describe("User ID who owns the card"),
     input: z.string().optional().describe("Either individual field or quick-add syntax like 'front|back|tag1,tag2|example'"),
     front: z.string().optional().describe("Front side of the card (e.g., Swedish word)"),
     back: z.string().optional().describe("Back side of the card (e.g., English translation)"),
@@ -136,7 +137,7 @@ export const listCardsTool = createTool({
   id: "list-cards-tool",
   description: `List vocabulary cards with optional filtering by tags, search terms, and pagination support.`,
   inputSchema: z.object({
-    owner_id: z.coerce.number().describe("User ID who owns the cards"),
+    owner_id: z.string().describe("User ID who owns the cards"),
     limit: z.number().default(10).describe("Maximum number of cards to return"),
     offset: z.number().default(0).describe("Number of cards to skip for pagination"),
     tags: z.string().optional().describe("Comma-separated tags to filter by"),
@@ -227,7 +228,7 @@ export const editCardTool = createTool({
   id: "edit-card-tool",
   description: `Edit an existing vocabulary card by updating its front, back, tags, or example content.`,
   inputSchema: z.object({
-    owner_id: z.coerce.number().describe("User ID who owns the card"),
+    owner_id: z.string().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card to edit"),
     front: z.string().optional().describe("New front side content"),
     back: z.string().optional().describe("New back side content"),
@@ -323,7 +324,7 @@ export const deleteCardTool = createTool({
   id: "delete-card-tool",
   description: `Delete a vocabulary card from the collection. This marks the card as inactive rather than permanently removing it.`,
   inputSchema: z.object({
-    owner_id: z.coerce.number().describe("User ID who owns the card"),
+    owner_id: z.string().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card to delete"),
     confirm: z.boolean().default(false).describe("Confirmation that the user wants to delete the card"),
   }),
