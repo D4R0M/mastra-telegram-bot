@@ -795,6 +795,47 @@ async function handleImportCSVFlow(
 // Settings Menu Flow
 // ===============================
 
+async function reopenSettingsMenu(
+  userId: string,
+  mastra: any,
+  successMessage: string,
+  logger?: IMastraLogger | null,
+): Promise<CommandResponse> {
+  const settingsHandler = commandRegistry["/settings"];
+
+  if (!settingsHandler) {
+    logger?.warn(
+      "⚠️ [CommandParser] Settings handler unavailable when refreshing menu",
+    );
+    return {
+      response: successMessage,
+      parse_mode: "HTML",
+    };
+  }
+
+  try {
+    const menuResponse = await settingsHandler([], "", userId, undefined, mastra);
+    const menuText = menuResponse.response ?? "";
+    const combinedResponse =
+      successMessage && menuText
+        ? `${successMessage}\n\n${menuText}`
+        : successMessage || menuText;
+
+    return {
+      ...menuResponse,
+      response: combinedResponse,
+    };
+  } catch (error) {
+    logger?.error("❌ [CommandParser] Failed to refresh settings menu", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      response: successMessage,
+      parse_mode: "HTML",
+    };
+  }
+}
+
 async function handleSettingsMenuFlow(
   message: string,
   userId: string,
@@ -834,11 +875,12 @@ async function handleSettingsMenuFlow(
       });
 
       if (result.success) {
-        return {
-          response: `✅ Timezone updated to <b>${input}</b>`,
-          conversationState: undefined,
-          parse_mode: "HTML",
-        };
+        return reopenSettingsMenu(
+          userId,
+          mastra,
+          `✅ Timezone updated to <b>${input}</b>`,
+          logger,
+        );
       } else {
         return {
           response: `❌ ${result.message}`,
@@ -881,11 +923,12 @@ async function handleSettingsMenuFlow(
       });
 
       if (result.success) {
-        return {
-          response: `✅ Language updated to <b>${lang}</b>`,
-          conversationState: undefined,
-          parse_mode: "HTML",
-        };
+        return reopenSettingsMenu(
+          userId,
+          mastra,
+          `✅ Language updated to <b>${lang}</b>`,
+          logger,
+        );
       } else {
         return {
           response: `❌ ${result.message}`,
@@ -928,11 +971,12 @@ async function handleSettingsMenuFlow(
       });
 
       if (result.success) {
-        return {
-          response: `✅ Session size updated to <b>${size}</b> cards`,
-          conversationState: undefined,
-          parse_mode: "HTML",
-        };
+        return reopenSettingsMenu(
+          userId,
+          mastra,
+          `✅ Session size updated to <b>${size}</b> cards`,
+          logger,
+        );
       } else {
         return {
           response: `❌ ${result.message}`,
@@ -975,11 +1019,12 @@ async function handleSettingsMenuFlow(
       });
 
       if (result.success) {
-        return {
-          response: `✅ Daily new cards updated to <b>${count}</b>`,
-          conversationState: undefined,
-          parse_mode: "HTML",
-        };
+        return reopenSettingsMenu(
+          userId,
+          mastra,
+          `✅ Daily new cards updated to <b>${count}</b>`,
+          logger,
+        );
       } else {
         return {
           response: `❌ ${result.message}`,
@@ -1022,11 +1067,12 @@ async function handleSettingsMenuFlow(
       });
 
       if (result.success) {
-        return {
-          response: `✅ Daily reviews updated to <b>${count}</b>`,
-          conversationState: undefined,
-          parse_mode: "HTML",
-        };
+        return reopenSettingsMenu(
+          userId,
+          mastra,
+          `✅ Daily reviews updated to <b>${count}</b>`,
+          logger,
+        );
       } else {
         return {
           response: `❌ ${result.message}`,
@@ -1073,11 +1119,12 @@ async function handleSettingsMenuFlow(
       });
 
       if (result.success) {
-        return {
-          response: `✅ Reminder times updated to <b>${times.join(", ")}</b>`,
-          conversationState: undefined,
-          parse_mode: "HTML",
-        };
+        return reopenSettingsMenu(
+          userId,
+          mastra,
+          `✅ Reminder times updated to <b>${times.join(", ")}</b>`,
+          logger,
+        );
       } else {
         return {
           response: `❌ ${result.message}`,
