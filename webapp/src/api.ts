@@ -1,17 +1,20 @@
 import type { NextCardResponse, SubmitPayload, SubmitResponse } from "./types";
+import { getInitData } from "./telegram";
 
-export async function api(path: string, init: RequestInit = {}) {
-  const tg = window.Telegram?.WebApp;
-  const headers = new Headers(init.headers || {});
-  if (tg?.initData) {
-    headers.set("X-Telegram-Init-Data", tg.initData);
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+  window.location.origin;
+
+function buildUrl(path: string, params?: Record<string, string | undefined>) {
+  const url = new URL(path, API_BASE);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value) {
+        url.searchParams.set(key, value);
+      }
+    }
   }
-
-  return fetch(`/api${path}`, {
-    ...init,
-    headers,
-    credentials: "omit",
-  });
+  return url.toString();
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -28,14 +31,21 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export async function fetchNextCard(
   sessionId?: string | null,
 ): Promise<NextCardResponse> {
-  const params = new URLSearchParams();
-  if (sessionId) {
-    params.set("sessionId", sessionId);
+  const initData = getInitData();
+  if (!initData) {
+    throw new Error("Missing Telegram init data");
   }
 
-  const response = await api(
-    `/practice/next${params.size ? `?${params.toString()}` : ""}`,
-  );
+  const url = buildUrl("/api/practice/next", {
+    sessionId: sessionId || undefined,
+  });
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-Telegram-Init-Data": initData,
+    },
+  });
 
   return handleResponse<NextCardResponse>(response);
 }
@@ -43,10 +53,16 @@ export async function fetchNextCard(
 export async function submitReview(
   payload: SubmitPayload,
 ): Promise<SubmitResponse> {
-  const response = await api("/practice/submit", {
+  const initData = getInitData();
+  if (!initData) {
+    throw new Error("Missing Telegram init data");
+  }
+
+  const response = await fetch(buildUrl("/api/practice/submit"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData,
     },
     body: JSON.stringify(payload),
   });
