@@ -1,5 +1,9 @@
 import { inngest } from "../mastra/inngest/client.js";
 
+/**
+ * Scheduled reminder workflow
+ * Logs [ReminderWorkflow] and a step [CheckReminderTime] so we can verify scheduling.
+ */
 export const checkReminders = inngest.createFunction(
   {
     id: "check-reminders",
@@ -23,7 +27,7 @@ export const checkReminders = inngest.createFunction(
     });
 
     return result;
-  },
+  }
 );
 
 export default checkReminders;
