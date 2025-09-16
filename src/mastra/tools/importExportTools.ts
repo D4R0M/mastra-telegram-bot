@@ -4,7 +4,6 @@ import { z } from "zod";
 import { createCard, getCardsByOwner } from "../../db/cards.js";
 import { getDueCards } from "../../db/reviews.js";
 import type { CreateCardData } from "../../db/cards.js";
-import type { ID } from "../../types/ids.js";
 
 // Interface for CSV import/export data
 interface CSVCard {
@@ -161,7 +160,7 @@ export const importCSVTool = createTool({
   id: "import-csv-tool",
   description: `Import vocabulary cards from CSV data with automatic header detection. Supports various column arrangements and header names.`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID who will own the imported cards"),
+    owner_id: z.coerce.number().describe("User ID who will own the imported cards"),
     csv_data: z.string().describe("CSV data to import (with or without headers)"),
     has_headers: z.boolean().default(true).describe("Whether the CSV data includes header row"),
     default_lang_front: z.string().default("").describe("Default front language if not specified in CSV"),
@@ -328,7 +327,7 @@ export const exportCSVTool = createTool({
   id: "export-csv-tool",
   description: `Export vocabulary cards to CSV format with proper escaping and headers.`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID whose cards to export"),
+    owner_id: z.coerce.number().describe("User ID whose cards to export"),
     include_inactive: z.boolean().default(false).describe("Whether to include inactive/deleted cards"),
     tags_filter: z.array(z.string()).optional().describe("Only export cards with these tags"),
     limit: z.number().optional().describe("Maximum number of cards to export"),

@@ -20,16 +20,6 @@ import type {
   UpdateReviewStateData,
   ReviewEvent,
 } from "../../db/reviews.js";
-import type { ID } from "../../types/ids.js";
-
-export interface SubmitReviewInput {
-  owner_id: ID;
-  card_id: ID;
-  start_time: number;
-  grade: number;
-  session_id?: string;
-  position_in_session?: number;
-}
 
 function getTimeOfDayBucket(date: Date): string {
   const hour = date.getHours();
@@ -44,7 +34,7 @@ export const getDueCardsTool = createTool({
   id: "get-due-cards-tool",
   description: `Get vocabulary cards that are due for review today, ordered by priority (oldest due date first).`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID who owns the cards"),
+    owner_id: z.coerce.number().describe("User ID who owns the cards"),
     limit: z
       .number()
       .default(10)
@@ -200,7 +190,7 @@ export const startReviewTool = createTool({
   id: "start-review-tool",
   description: `Start reviewing a specific card by showing the front side. This begins the active recall process and starts timing.`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID who owns the card"),
+    owner_id: z.coerce.number().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card to review"),
     session_id: z
       .string()
@@ -300,7 +290,7 @@ export const submitReviewTool = createTool({
   id: "submit-review-tool",
   description: `Submit a review grade (0-5) for a card and update the SM-2 spaced repetition schedule. Shows the correct answer after grading.`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User ID who owns the card"),
+    owner_id: z.coerce.number().describe("User ID who owns the card"),
     card_id: z.string().describe("ID of the card being reviewed"),
     grade: z
       .number()
@@ -316,10 +306,6 @@ export const submitReviewTool = createTool({
       .string()
       .optional()
       .describe("Session ID for tracking review sessions"),
-    position_in_session: z
-      .number()
-      .optional()
-      .describe("Position of the card within the session"),
   }),
   outputSchema: z.object({
     success: z.boolean(),

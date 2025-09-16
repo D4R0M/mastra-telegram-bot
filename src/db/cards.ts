@@ -1,10 +1,9 @@
 import { getPool } from './client.js';
 import type { PoolClient } from 'pg';
-import type { ID } from '../types/ids.js';
 
 export interface Card {
   id: string;
-  owner_id: ID;
+  owner_id: number;
   front: string;
   back: string;
   tags: string[];
@@ -17,7 +16,7 @@ export interface Card {
 }
 
 export interface CreateCardData {
-  owner_id: ID;
+  owner_id: number;
   front: string;
   back: string;
   tags?: string[];
@@ -53,11 +52,10 @@ export async function createCard(data: CreateCardData, client?: PoolClient): Pro
     data.lang_back || 'en'
   ]);
   
-  const row = result.rows[0];
-  return { ...row, owner_id: String(row.owner_id) };
+  return result.rows[0];
 }
 
-export async function getCardById(id: string, owner_id: ID, client?: PoolClient): Promise<Card | null> {
+export async function getCardById(id: string, owner_id: number, client?: PoolClient): Promise<Card | null> {
   const pool = client || getPool();
   
   const result = await pool.query(`
@@ -65,12 +63,11 @@ export async function getCardById(id: string, owner_id: ID, client?: PoolClient)
     WHERE id = $1 AND owner_id = $2 AND active = true
   `, [id, owner_id]);
   
-  const row = result.rows[0];
-  return row ? { ...row, owner_id: String(row.owner_id) } : null;
+  return result.rows[0] || null;
 }
 
 export async function getCardsByOwner(
-  owner_id: ID,
+  owner_id: number,
   options: {
     limit?: number;
     offset?: number;
@@ -114,10 +111,10 @@ export async function getCardsByOwner(
   }
   
   const result = await pool.query(query, params);
-  return result.rows.map((row) => ({ ...row, owner_id: String(row.owner_id) }));
+  return result.rows;
 }
 
-export async function updateCard(id: string, owner_id: ID, data: UpdateCardData, client?: PoolClient): Promise<Card | null> {
+export async function updateCard(id: string, owner_id: number, data: UpdateCardData, client?: PoolClient): Promise<Card | null> {
   const pool = client || getPool();
   
   const setClause = [];
@@ -178,11 +175,10 @@ export async function updateCard(id: string, owner_id: ID, data: UpdateCardData,
   `;
   
   const result = await pool.query(query, params);
-  const row = result.rows[0];
-  return row ? { ...row, owner_id: String(row.owner_id) } : null;
+  return result.rows[0] || null;
 }
 
-export async function deleteCard(id: string, owner_id: ID, client?: PoolClient): Promise<boolean> {
+export async function deleteCard(id: string, owner_id: number, client?: PoolClient): Promise<boolean> {
   const pool = client || getPool();
   
   const result = await pool.query(`
@@ -194,7 +190,7 @@ export async function deleteCard(id: string, owner_id: ID, client?: PoolClient):
   return (result.rowCount || 0) > 0;
 }
 
-export async function countCards(owner_id: ID, options: { active?: boolean; tags?: string[] } = {}, client?: PoolClient): Promise<number> {
+export async function countCards(owner_id: number, options: { active?: boolean; tags?: string[] } = {}, client?: PoolClient): Promise<number> {
   const pool = client || getPool();
   
   let query = `SELECT COUNT(*) FROM cards WHERE owner_id = $1`;

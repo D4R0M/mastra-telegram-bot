@@ -18,7 +18,7 @@ const fetchReminderUsersStep = createStep({
   outputSchema: z.object({
     users: z.array(
       z.object({
-        user_id: z.string(),
+        user_id: z.number(),
         chat_id: z.string(),
       }),
     ),
@@ -35,7 +35,7 @@ const fetchReminderUsersStep = createStep({
 
       return {
         users: result.rows.map((r: any) => ({
-          user_id: String(r.user_id),
+          user_id: Number(r.user_id),
           chat_id: String(r.chat_id),
         })),
       };
@@ -56,7 +56,7 @@ const processRemindersStep = createStep({
   inputSchema: z.object({
     users: z.array(
       z.object({
-        user_id: z.string(),
+        user_id: z.number(),
         chat_id: z.string(),
       }),
     ),
@@ -74,7 +74,7 @@ const processRemindersStep = createStep({
 
       try {
         const check = await checkReminderTimeTool.execute({
-          context: { user_id: user.user_id, force_check: false },
+          context: { user_id: user.user_id },
           ...execCtx,
           mastra,
         });

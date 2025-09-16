@@ -3,10 +3,9 @@ import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
 import { getPool } from "../../db/client.js";
 import type { PoolClient } from 'pg';
-import type { ID } from "../../types/ids.js";
 
 interface ReminderSettings {
-  user_id: ID;
+  user_id: number;
   enabled: boolean;
   preferred_times: string[]; // Array of times in HH:MM format
   dnd_start: string; // Do Not Disturb start time (HH:MM)
@@ -97,12 +96,12 @@ export const getReminderSettingsTool = createTool({
   id: "get-reminder-settings-tool",
   description: `Get the current reminder settings for a user, including timezone preferences, Do Not Disturb periods, and preferred reminder times.`,
   inputSchema: z.object({
-    user_id: z.string().describe("User ID to get reminder settings for"),
+    user_id: z.coerce.number().describe("User ID to get reminder settings for"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
     settings: z.object({
-      user_id: z.string(),
+      user_id: z.number(),
       enabled: z.boolean(),
       preferred_times: z.array(z.string()),
       dnd_start: z.string(),
@@ -163,7 +162,7 @@ export const getReminderSettingsTool = createTool({
       } else {
         const row = result.rows[0];
         settings = {
-          user_id: String(row.user_id),
+          user_id: row.user_id,
           enabled: row.reminders_enabled,
           preferred_times: Array.isArray(row.reminder_times) 
             ? row.reminder_times.map((time: string) => formatTimeFromDB(time))
@@ -185,7 +184,7 @@ export const getReminderSettingsTool = createTool({
       return {
         success: true,
         settings: {
-          user_id: String(settings.user_id),
+          user_id: settings.user_id,
           enabled: settings.enabled,
           preferred_times: settings.preferred_times,
           dnd_start: settings.dnd_start,
@@ -210,7 +209,7 @@ export const updateReminderSettingsTool = createTool({
   id: "update-reminder-settings-tool",
   description: `Update reminder settings including preferred times, Do Not Disturb periods, and reminder frequency.`,
   inputSchema: z.object({
-    user_id: z.string().describe("User ID to update settings for"),
+    user_id: z.coerce.number().describe("User ID to update settings for"),
     enabled: z.boolean().optional().describe("Whether reminders are enabled"),
     preferred_times: z.array(z.string()).optional().describe("Preferred reminder times in HH:MM format (e.g., ['09:00', '14:00', '19:00'])"),
     dnd_start: z.string().optional().describe("Do Not Disturb start time in HH:MM format (e.g., '22:00')"),
@@ -360,7 +359,7 @@ export const checkReminderTimeTool = createTool({
   id: "check-reminder-time-tool",
   description: `Check if the current time is appropriate for sending a reminder based on user's timezone, Do Not Disturb settings, and reminder frequency limits.`,
   inputSchema: z.object({
-    user_id: z.string().describe("User ID to check reminder timing for"),
+    user_id: z.coerce.number().describe("User ID to check reminder timing for"),
     force_check: z.boolean().default(false).describe("Override interval checks (for testing)"),
   }),
   outputSchema: z.object({
@@ -529,7 +528,7 @@ export const recordReminderSentTool = createTool({
   id: "record-reminder-sent-tool",  
   description: `Record that a reminder was sent to update the last reminder timestamp for rate limiting.`,
   inputSchema: z.object({
-    user_id: z.string().describe("User ID who received the reminder"),
+    user_id: z.coerce.number().describe("User ID who received the reminder"),
   }),
   outputSchema: z.object({
     success: z.boolean(),

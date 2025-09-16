@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
 
-const TEST_USER_ID = "12345";
+const TEST_USER_ID = 12345;
 
 vi.mock('../src/db/reviews.ts', () => ({
   getReviewState: vi.fn(async () => ({

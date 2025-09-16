@@ -3,7 +3,6 @@ import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
 import { getPool } from "../../db/client";
 import { getDueCardsStats, getRetentionStats, getStreakStats, getEaseHistogram } from "./statistics/helpers";
-import type { ID } from "../../types/ids.js";
 
 // ===============================
 // Types for Statistics
@@ -79,7 +78,7 @@ export const getDueCardsStatsTool = createTool({
   id: "get-due-cards-stats-tool",
   description: `Get comprehensive statistics about due cards, including counts by queue type, due dates, and review metrics`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User identifier to get statistics for"),
+    owner_id: z.coerce.number().describe("User identifier to get statistics for"),
     timezone: z.string().default("Europe/Stockholm").describe("Timezone for date calculations"),
   }),
   outputSchema: z.object({
@@ -155,7 +154,7 @@ export const getRetentionStatsTool = createTool({
   id: "get-retention-stats-tool",
   description: `Calculate retention rates and learning progress based on review history and success rates`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User identifier to calculate retention for"),
+    owner_id: z.coerce.number().describe("User identifier to calculate retention for"),
     success_threshold: z.number().min(0).max(5).default(3).describe("Minimum grade considered successful (0-5)"),
   }),
   outputSchema: z.object({
@@ -231,7 +230,7 @@ export const getStreakStatsTool = createTool({
   id: "get-streak-stats-tool", 
   description: `Calculate study streaks, consistency metrics, and daily review patterns`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User identifier to calculate streaks for"),
+    owner_id: z.coerce.number().describe("User identifier to calculate streaks for"),
     timezone: z.string().default("Europe/Stockholm").describe("Timezone for date calculations"),
   }),
   outputSchema: z.object({
@@ -413,7 +412,7 @@ export const getEaseHistogramTool = createTool({
   id: "get-ease-histogram-tool",
   description: `Generate ease factor distribution histogram to analyze card difficulty patterns and learning progress`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User identifier to analyze ease factors for"),
+    owner_id: z.coerce.number().describe("User identifier to analyze ease factors for"),
     bin_size: z.number().min(0.1).max(1.0).default(0.2).describe("Size of ease factor bins for histogram (0.1-1.0)"),
   }),
   outputSchema: z.object({
@@ -566,7 +565,7 @@ export const getComprehensiveStatsTool = createTool({
   id: "get-comprehensive-stats-tool",
   description: `Get a comprehensive overview of all statistics including due cards, retention, streaks, and ease distribution`,
   inputSchema: z.object({
-    owner_id: z.string().describe("User identifier to get comprehensive statistics for"),
+    owner_id: z.coerce.number().describe("User identifier to get comprehensive statistics for"),
     timezone: z.string().default("Europe/Stockholm").describe("Timezone for date calculations"),
     success_threshold: z.number().min(0).max(5).default(3).describe("Minimum grade considered successful (0-5)"),
   }),
