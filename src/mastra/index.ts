@@ -26,6 +26,7 @@ import { processTelegramUpdate } from "./telegram.js";
 import {
   createPracticeNextHandler,
   createPracticeSubmitHandler,
+  createPracticeWebAppHandler,
 } from "../server/routes/practice.js";
 import {
   addCardTool,
@@ -351,6 +352,16 @@ export const mastra = new Mastra({
               method: "POST",
               createHandler: async ({ mastra }) =>
                 createPracticeSubmitHandler(mastra),
+            },
+            {
+              path: "/practice",
+              method: "GET",
+              createHandler: async () => createPracticeWebAppHandler(),
+            },
+            {
+              path: "/practice/*",
+              method: "GET",
+              createHandler: async () => createPracticeWebAppHandler(),
             },
           ]
         : []),
