@@ -8,12 +8,10 @@ export const checkReminders = inngest.createFunction(
   {
     id: "check-reminders",
     name: "ReminderWorkflow",
-    triggers: [
-      {
-        cron: "*/30 * * * *",
-        timezone: "Europe/Stockholm",
-      },
-    ],
+  },
+  {
+    cron: "*/30 * * * *",
+    timezone: "Europe/Stockholm",
   },
   async ({ step, logger }) => {
     logger.info("[ReminderWorkflow] scheduled reminder check started");
