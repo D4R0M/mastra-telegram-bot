@@ -183,14 +183,25 @@ a {
   background: rgba(15, 23, 42, 0.04);
 }
 
-.quality--again {
+.quality--again,
+.quality--forgot {
   color: #dc2626;
   background: rgba(220, 38, 38, 0.12);
 }
 
-.quality--hard {
-  color: #c2410c;
+.quality--wrong {
+  color: #ea580c;
   background: rgba(234, 88, 12, 0.12);
+}
+
+.quality--hard {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.12);
+}
+
+.quality--difficult {
+  color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.12);
 }
 
 .quality--good {

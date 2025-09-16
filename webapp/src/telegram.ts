@@ -92,7 +92,11 @@ export function applyTheme(webApp: TelegramWebApp | undefined = getWebApp()) {
 
   Object.entries(params).forEach(([key, value]) => {
     if (typeof value === "string") {
-      root.style.setProperty(`--tg-${key.replace(/_/g, "-")}`, value);
+      const hyphenKey = key.replace(/_/g, "-");
+      root.style.setProperty(`--tg-${key}`, value);
+      if (hyphenKey !== key) {
+        root.style.setProperty(`--tg-${hyphenKey}`, value);
+      }
     }
   });
 
