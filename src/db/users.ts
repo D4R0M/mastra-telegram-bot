@@ -1,9 +1,8 @@
 import { getPool } from './client.js';
 import type { PoolClient } from 'pg';
-import type { ID } from '../types/ids.js';
 
 export interface UpsertUser {
-  user_id: ID;
+  user_id: number;
   username?: string | null;
   first_name?: string | null;
   last_name?: string | null;

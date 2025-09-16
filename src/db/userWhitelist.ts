@@ -1,21 +1,20 @@
 import { getPool } from './client.js';
 import type { PoolClient } from 'pg';
-import type { ID } from '../types/ids.js';
 
 export interface WhitelistUser {
-  user_id: ID;
+  user_id: number;
   username: string | null;
   role: string;
   added_at: Date;
-  added_by: ID | null;
+  added_by: number | null;
   note: string | null;
 }
 
 export interface UpsertWhitelistUser {
-  user_id: ID;
+  user_id: number;
   username?: string | null;
   role?: string;
-  added_by?: ID | null;
+  added_by?: number | null;
   note?: string | null;
 }
 
@@ -43,7 +42,7 @@ export async function upsertWhitelistUser(
 }
 
 export async function removeWhitelistUser(
-  user_id: ID,
+  user_id: number,
   client?: PoolClient,
 ): Promise<void> {
   const pool = client || getPool();
@@ -60,11 +59,7 @@ export async function listWhitelist(
     `SELECT * FROM user_whitelist ORDER BY added_at DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
-  return res.rows.map((row) => ({
-    ...row,
-    user_id: String(row.user_id),
-    added_by: row.added_by ? String(row.added_by) : null,
-  }));
+  return res.rows;
 }
 
 export async function exportWhitelist(
@@ -72,11 +67,7 @@ export async function exportWhitelist(
 ): Promise<WhitelistUser[]> {
   const pool = client || getPool();
   const res = await pool.query(`SELECT * FROM user_whitelist ORDER BY added_at DESC`);
-  return res.rows.map((row) => ({
-    ...row,
-    user_id: String(row.user_id),
-    added_by: row.added_by ? String(row.added_by) : null,
-  }));
+  return res.rows;
 }
 
 export async function fetchWhitelist(
@@ -84,9 +75,5 @@ export async function fetchWhitelist(
 ): Promise<WhitelistUser[]> {
   const pool = client || getPool();
   const res = await pool.query(`SELECT * FROM user_whitelist`);
-  return res.rows.map((row) => ({
-    ...row,
-    user_id: String(row.user_id),
-    added_by: row.added_by ? String(row.added_by) : null,
-  }));
+  return res.rows;
 }

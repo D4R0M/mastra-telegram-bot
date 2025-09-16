@@ -438,7 +438,7 @@ export const mastra = new Mastra({
       // Health check endpoint for Railway
       {
         path: "/health",
-        method: "GET" as const,
+        method: "GET",
         createHandler: async () => {
           return (c) => c.json({ status: "ok" });
         },
@@ -452,7 +452,7 @@ export const mastra = new Mastra({
       // Telegram webhook endpoint
       {
         path: "/webhooks/telegram/action",
-        method: "POST" as const,
+        method: "POST",
         createHandler: async ({ mastra }) => {
           return async (c) => {
             const logger = mastra.getLogger();
@@ -498,13 +498,13 @@ export const mastra = new Mastra({
         ? [
             {
               path: "/api/practice/next",
-              method: "GET" as const,
+              method: "GET",
               createHandler: async ({ mastra }) =>
                 createPracticeNextHandler(mastra),
             },
             {
               path: "/api/practice/submit",
-              method: "POST" as const,
+              method: "POST",
               createHandler: async ({ mastra }) =>
                 createPracticeSubmitHandler(mastra),
             },
@@ -524,10 +524,8 @@ export const mastra = new Mastra({
         }),
 });
 
-if (process.env.REMINDERS_ENABLED === "true") {
-  reminderWorkflow.__registerMastra(mastra);
-  registerCronWorkflow("*/30 * * * *", reminderWorkflow);
-}
+reminderWorkflow.__registerMastra(mastra);
+registerCronWorkflow("*/30 * * * *", reminderWorkflow);
 
 /*  Sanity check 1: Throw an error if there are more than 1 workflows.  */
 // !!!!!! Do not remove this check. !!!!!!

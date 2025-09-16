@@ -1,25 +1,24 @@
 import { getPool } from "./client.js";
 import type { PoolClient } from "pg";
-import type { ID } from "../types/ids.js";
 
 export interface ReviewState {
-  user_id: ID;
-  card_id: ID;
+  card_id: string;
+  user_id: number;
   interval_days: number;
   repetitions: number;
   ease_factor: number;
-  due_date: string;
-  last_reviewed_at: string | null;
-  last_grade: number | null;
+  due_date: string; // ISO date string
+  last_reviewed_at?: Date;
+  last_grade?: number;
   lapses: number;
   queue: "new" | "learning" | "review";
-  direction_mode: "front" | "back" | "both";
+  direction_mode: string;
 }
 
 export interface ReviewLog {
   id: string;
-  card_id: ID;
-  user_id: ID;
+  card_id: string;
+  user_id: number;
   reviewed_at: Date;
   grade: number;
   prev_ease?: number;
@@ -36,8 +35,8 @@ export interface ReviewLog {
 }
 
 export interface CreateReviewStateData {
-  card_id: ID;
-  user_id: ID;
+  card_id: string;
+  user_id: number;
   interval_days?: number;
   repetitions?: number;
   ease_factor?: number;
@@ -59,8 +58,8 @@ export interface UpdateReviewStateData {
 }
 
 export interface CreateReviewLogData {
-  card_id: ID;
-  user_id: ID;
+  card_id: string;
+  user_id: number;
   grade: number;
   prev_ease?: number;
   new_ease?: number;
@@ -103,26 +102,11 @@ export async function createReviewState(
     ],
   );
 
-  const row = result.rows[0];
-  return {
-    user_id: String(row.user_id),
-    card_id: row.card_id,
-    interval_days: row.interval_days,
-    repetitions: row.repetitions,
-    ease_factor: row.ease_factor,
-    due_date: row.due_date,
-    last_reviewed_at: row.last_reviewed_at
-      ? row.last_reviewed_at.toISOString()
-      : null,
-    last_grade: row.last_grade,
-    lapses: row.lapses,
-    queue: row.queue,
-    direction_mode: row.direction_mode,
-  };
+  return result.rows[0];
 }
 
 export async function getReviewState(
-  card_id: ID,
+  card_id: string,
   client?: PoolClient,
 ): Promise<ReviewState | null> {
   const pool = client || getPool();
@@ -134,27 +118,11 @@ export async function getReviewState(
     [card_id],
   );
 
-  const row = result.rows[0];
-  if (!row) return null;
-  return {
-    user_id: String(row.user_id),
-    card_id: row.card_id,
-    interval_days: row.interval_days,
-    repetitions: row.repetitions,
-    ease_factor: row.ease_factor,
-    due_date: row.due_date,
-    last_reviewed_at: row.last_reviewed_at
-      ? row.last_reviewed_at.toISOString()
-      : null,
-    last_grade: row.last_grade,
-    lapses: row.lapses,
-    queue: row.queue,
-    direction_mode: row.direction_mode,
-  };
+  return result.rows[0] || null;
 }
 
 export async function getReviewStates(
-  card_ids: ID[],
+  card_ids: string[],
   client?: PoolClient,
 ): Promise<ReviewState[]> {
   const pool = client || getPool();
@@ -169,25 +137,11 @@ export async function getReviewStates(
     card_ids,
   );
 
-  return result.rows.map((row) => ({
-    user_id: String(row.user_id),
-    card_id: row.card_id,
-    interval_days: row.interval_days,
-    repetitions: row.repetitions,
-    ease_factor: row.ease_factor,
-    due_date: row.due_date,
-    last_reviewed_at: row.last_reviewed_at
-      ? row.last_reviewed_at.toISOString()
-      : null,
-    last_grade: row.last_grade,
-    lapses: row.lapses,
-    queue: row.queue,
-    direction_mode: row.direction_mode,
-  }));
+  return result.rows as ReviewState[];
 }
 
 export async function updateReviewState(
-  card_id: ID,
+  card_id: string,
   data: UpdateReviewStateData,
   client?: PoolClient,
 ): Promise<ReviewState | null> {
@@ -263,27 +217,11 @@ export async function updateReviewState(
   `;
 
   const result = await pool.query(query, params);
-  const row = result.rows[0];
-  if (!row) return null;
-  return {
-    user_id: String(row.user_id),
-    card_id: row.card_id,
-    interval_days: row.interval_days,
-    repetitions: row.repetitions,
-    ease_factor: row.ease_factor,
-    due_date: row.due_date,
-    last_reviewed_at: row.last_reviewed_at
-      ? row.last_reviewed_at.toISOString()
-      : null,
-    last_grade: row.last_grade,
-    lapses: row.lapses,
-    queue: row.queue,
-    direction_mode: row.direction_mode,
-  };
+  return result.rows[0] || null;
 }
 
 export async function getDueCards(
-  user_id: ID,
+  user_id: number,
   limit?: number,
   client?: PoolClient,
 ): Promise<Array<{ card: any; review_state: ReviewState }>> {
@@ -301,7 +239,7 @@ export async function getDueCards(
     ORDER BY rs.due_date ASC, c.created_at ASC
   `;
 
-  const params: (string | number)[] = [user_id, today];
+  const params: (number | string)[] = [user_id, today];
 
   if (limit) {
     query += ` LIMIT $3`;
@@ -313,7 +251,7 @@ export async function getDueCards(
   return result.rows.map((row) => ({
     card: {
       id: row.id,
-      owner_id: String(row.owner_id),
+      owner_id: row.owner_id,
       front: row.front,
       back: row.back,
       tags: row.tags,
@@ -325,15 +263,12 @@ export async function getDueCards(
       updated_at: row.updated_at,
     },
     review_state: {
-      user_id: String(row.user_id),
       card_id: row.card_id,
       interval_days: row.interval_days,
       repetitions: row.repetitions,
       ease_factor: row.ease_factor,
       due_date: row.due_date,
-      last_reviewed_at: row.last_reviewed_at
-        ? row.last_reviewed_at.toISOString()
-        : null,
+      last_reviewed_at: row.last_reviewed_at,
       last_grade: row.last_grade,
       lapses: row.lapses,
       queue: row.queue,
@@ -379,16 +314,11 @@ export async function createReviewLog(
     ],
   );
 
-  const row = result.rows[0];
-  return {
-    ...row,
-    card_id: row.card_id,
-    user_id: String(row.user_id),
-  };
+  return result.rows[0];
 }
 
 export async function getReviewStats(
-  user_id: ID,
+  user_id: number,
   client?: PoolClient,
 ): Promise<{
   total_cards: number;
@@ -442,8 +372,8 @@ export async function getReviewStats(
 }
 
 export interface ReviewEvent {
-  card_id: ID;
-  user_id: ID;
+  card_id: string;
+  user_id: number;
   ts_shown: Date;
   ts_answered: Date;
   grade: number;
@@ -525,7 +455,7 @@ export async function logReview(
 }
 
 export interface ReviewEventLog {
-  user_id: ID;
+  user_id: number;
   user_hash: string;
   session_id?: string;
   card_id?: string;

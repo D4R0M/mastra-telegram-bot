@@ -64,7 +64,7 @@ export async function processTelegramUpdate(
   if (chatType && chatType !== "private") {
     if (token && chatId) {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST" as const,
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
@@ -99,7 +99,7 @@ export async function processTelegramUpdate(
     logger?.warn("unauthorized", { userId, username });
     if (!unauthorizedNotified.has(userIdStr)) {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST" as const,
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
@@ -197,7 +197,7 @@ export async function processTelegramUpdate(
           if (action === "approve" && entry.userId) {
             await allowUser(entry.userId, null, undefined, userIdStr);
             await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: "POST" as const,
+              method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chat_id: entry.userId,
@@ -211,7 +211,7 @@ export async function processTelegramUpdate(
           } else {
             if (entry.userId) {
               await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                method: "POST" as const,
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   chat_id: entry.userId,
@@ -251,7 +251,7 @@ export async function processTelegramUpdate(
         await fetch(
           `https://api.telegram.org/bot${token}/answerCallbackQuery`,
           {
-            method: "POST" as const,
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               callback_query_id: update.callback_query.id,
@@ -310,7 +310,7 @@ export async function processTelegramUpdate(
         form.append("reply_markup", JSON.stringify(result.inline_keyboard));
       }
       await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
-        method: "POST" as const,
+        method: "POST",
         body: form,
       });
     } else {
@@ -324,7 +324,7 @@ export async function processTelegramUpdate(
       if (result.edit_message_id) {
         body.message_id = result.edit_message_id;
         await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
-          method: "POST" as const,
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
@@ -332,7 +332,7 @@ export async function processTelegramUpdate(
         const res = await fetch(
           `https://api.telegram.org/bot${token}/sendMessage`,
           {
-            method: "POST" as const,
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           },

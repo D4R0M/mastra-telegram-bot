@@ -44,7 +44,7 @@ export async function submitReview(
   payload: SubmitPayload,
 ): Promise<SubmitResponse> {
   const response = await api("/practice/submit", {
-    method: "POST" as const,
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
     },

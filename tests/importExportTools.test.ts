@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const TEST_USER_ID = "12345";
+const TEST_USER_ID = 12345;
 
 vi.mock('../src/db/cards.ts', () => ({
   createCard: vi.fn(async (data) => ({ id: '1', ...data })),

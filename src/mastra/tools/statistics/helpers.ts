@@ -1,7 +1,6 @@
 import { getPool } from "../../../db/client";
 import type { IMastraLogger } from "@mastra/core/logger";
 import NodeCache from "node-cache";
-import type { ID } from "../../../types/ids.js";
 
 // ===============================
 // Statistics Helper Functions
@@ -63,7 +62,7 @@ interface EaseHistogram {
 }
 
 export async function getDueCardsStats(
-  user_id: ID,
+  user_id: number,
   timezone: string = "Europe/Stockholm",
   logger?: IMastraLogger,
 ) {
@@ -118,7 +117,7 @@ export async function getDueCardsStats(
 }
 
 export async function getRetentionStats(
-  user_id: ID,
+  user_id: number,
   success_threshold: number = 3,
   logger?: IMastraLogger,
 ) {
@@ -205,7 +204,7 @@ export async function getRetentionStats(
 }
 
 export async function getStreakStats(
-  user_id: ID,
+  user_id: number,
   timezone: string = "Europe/Stockholm",
   logger?: IMastraLogger,
 ) {
@@ -345,7 +344,7 @@ export async function getStreakStats(
 }
 
 export async function getEaseHistogram(
-  user_id: ID,
+  user_id: number,
   bin_size: number = 0.2,
   logger?: IMastraLogger,
 ) {

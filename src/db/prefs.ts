@@ -1,9 +1,8 @@
 import { getPool } from './client.js';
 import type { PoolClient } from 'pg';
-import type { ID } from '../types/ids.js';
 
 export interface UserPrefs {
-  user_id: ID;
+  user_id: number;
   chat_id: string;
   timezone: string;
   dnd_start?: string; // HH:MM format
@@ -20,7 +19,7 @@ export interface UserPrefs {
 }
 
 export interface CreatePrefsData {
-  user_id: ID;
+  user_id: number;
   chat_id: string;
   timezone?: string;
   dnd_start?: string;
@@ -85,19 +84,17 @@ export async function createUserPrefs(data: CreatePrefsData, client?: PoolClient
     data.locale || 'en'
   ]);
   
-  const row = result.rows[0];
-  return { ...row, user_id: String(row.user_id) };
+  return result.rows[0];
 }
 
-export async function getUserPrefs(user_id: ID, client?: PoolClient): Promise<UserPrefs | null> {
+export async function getUserPrefs(user_id: number, client?: PoolClient): Promise<UserPrefs | null> {
   const pool = client || getPool();
   
   const result = await pool.query(`
     SELECT * FROM prefs WHERE user_id = $1
   `, [user_id]);
-
-  const row = result.rows[0];
-  return row ? { ...row, user_id: String(row.user_id) } : null;
+  
+  return result.rows[0] || null;
 }
 
 export async function getUserPrefsByChatId(chat_id: string, client?: PoolClient): Promise<UserPrefs | null> {
@@ -106,12 +103,11 @@ export async function getUserPrefsByChatId(chat_id: string, client?: PoolClient)
   const result = await pool.query(`
     SELECT * FROM prefs WHERE chat_id = $1
   `, [chat_id]);
-
-  const row = result.rows[0];
-  return row ? { ...row, user_id: String(row.user_id) } : null;
+  
+  return result.rows[0] || null;
 }
 
-export async function updateUserPrefs(user_id: ID, data: UpdatePrefsData, client?: PoolClient): Promise<UserPrefs | null> {
+export async function updateUserPrefs(user_id: number, data: UpdatePrefsData, client?: PoolClient): Promise<UserPrefs | null> {
   const pool = client || getPool();
   
   const setClause = [];
@@ -190,11 +186,10 @@ export async function updateUserPrefs(user_id: ID, data: UpdatePrefsData, client
   `;
   
   const result = await pool.query(query, params);
-  const row = result.rows[0];
-  return row ? { ...row, user_id: String(row.user_id) } : null;
+  return result.rows[0] || null;
 }
 
-export async function deleteUserPrefs(user_id: ID, client?: PoolClient): Promise<boolean> {
+export async function deleteUserPrefs(user_id: number, client?: PoolClient): Promise<boolean> {
   const pool = client || getPool();
   
   const result = await pool.query(`
