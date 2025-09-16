@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "crypto";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const mocks = vi.hoisted(() => ({
   getDueCardsExecute: vi.fn(),
@@ -25,6 +28,7 @@ vi.mock("../src/mastra/tools/statisticsTools.js", () => ({
 import {
   createPracticeNextHandler,
   createPracticeSubmitHandler,
+  createPracticeWebAppHandler,
   __resetPracticeRateLimit,
 } from "../src/server/routes/practice.ts";
 
@@ -58,11 +62,15 @@ function createMockContext({
   headers = {},
   query = {},
   body,
+  url = "http://localhost/test",
+  pathname,
 }: {
   method?: string;
   headers?: Record<string, string>;
   query?: Record<string, string | undefined>;
   body?: any;
+  url?: string;
+  pathname?: string;
 } = {}) {
   const normalizedHeaders = new Map<string, string>();
   Object.entries(headers).forEach(([key, value]) => {
@@ -73,9 +81,36 @@ function createMockContext({
   const responseHeaders = new Map<string, string>();
   let statusCode = 200;
 
+  let derivedPath = pathname;
+  if (!derivedPath) {
+    try {
+      derivedPath = new URL(url).pathname;
+    } catch {
+      derivedPath = "/";
+    }
+  }
+
+  const send = (
+    payload: any,
+    code: number,
+    extraHeaders: Record<string, string> = {},
+  ) => {
+    statusCode = code;
+    Object.entries(extraHeaders).forEach(([key, value]) => {
+      responseHeaders.set(key, value);
+    });
+    return {
+      status: code,
+      body: payload,
+      headers: Object.fromEntries(responseHeaders),
+    };
+  };
+
   return {
     req: {
       method,
+      url,
+      path: derivedPath,
       header: (name: string) => normalizedHeaders.get(name.toLowerCase()) ?? null,
       query: (name: string) => query[name],
       json: async () => body,
@@ -88,25 +123,25 @@ function createMockContext({
         get: (key: string) => responseHeaders.get(key) ?? null,
       },
     },
+    get: () => undefined,
     status(code: number) {
       statusCode = code;
       return {
         json(payload: any) {
-          return {
-            status: code,
-            body: payload,
-            headers: Object.fromEntries(responseHeaders),
-          };
+          return send(payload, code);
         },
       };
     },
     json(payload: any, code = statusCode) {
-      statusCode = code;
-      return {
-        status: code,
-        body: payload,
-        headers: Object.fromEntries(responseHeaders),
-      };
+      return send(payload, code);
+    },
+    text(payload: string, code = statusCode) {
+      return send(payload, code, {
+        "Content-Type": "text/plain; charset=utf-8",
+      });
+    },
+    body(payload: any, code = statusCode, extraHeaders: Record<string, string> = {}) {
+      return send(payload, code, extraHeaders);
     },
   };
 }
@@ -125,6 +160,75 @@ beforeEach(() => {
   vi.resetAllMocks();
   __resetPracticeRateLimit();
   process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+});
+
+describe("practice webapp handler", () => {
+  it("returns 503 when webapp assets are missing", async () => {
+    const handler = createPracticeWebAppHandler({
+      distPath: path.join(os.tmpdir(), `missing-${Date.now()}`),
+    });
+
+    const response = await handler(
+      createMockContext({ url: "http://localhost/practice" }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(String(response.body)).toContain("Practice WebApp assets missing");
+  });
+
+  it("serves index html and static assets", async () => {
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), "practice-webapp-"));
+    try {
+      const assetsDir = path.join(tmpDir, "assets");
+      mkdirSync(assetsDir);
+      const indexHtml = "<!doctype html><html><body>Practice Ready</body></html>";
+      writeFileSync(path.join(tmpDir, "index.html"), indexHtml);
+      writeFileSync(path.join(assetsDir, "main.js"), "console.log('asset');");
+
+      const handler = createPracticeWebAppHandler({ distPath: tmpDir });
+
+      const indexResponse = await handler(
+        createMockContext({ url: "http://localhost/practice?session=practice" }),
+      );
+      expect(indexResponse.status).toBe(200);
+      expect(indexResponse.headers["Content-Type"]).toContain("text/html");
+      expect(indexResponse.headers["Cache-Control"]).toBe("no-cache");
+      expect(indexResponse.body.toString()).toContain("Practice Ready");
+
+      const assetResponse = await handler(
+        createMockContext({ url: "http://localhost/practice/assets/main.js" }),
+      );
+      expect(assetResponse.status).toBe(200);
+      expect(assetResponse.headers["Content-Type"]).toContain("javascript");
+      expect(assetResponse.headers["Cache-Control"]).toContain("immutable");
+      expect(assetResponse.body.toString()).toContain("asset");
+
+      const missingAsset = await handler(
+        createMockContext({ url: "http://localhost/practice/assets/missing.js" }),
+      );
+      expect(missingAsset.status).toBe(404);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects paths outside the dist directory", async () => {
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), "practice-webapp-"));
+    try {
+      writeFileSync(path.join(tmpDir, "index.html"), "<html></html>");
+      const handler = createPracticeWebAppHandler({ distPath: tmpDir });
+
+      const response = await handler(
+        createMockContext({
+          url: "http://localhost/practice/../secret",
+          pathname: "/practice/../secret",
+        }),
+      );
+      expect(response.status).toBe(404);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("practice routes", () => {

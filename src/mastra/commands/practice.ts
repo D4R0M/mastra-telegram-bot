@@ -39,10 +39,24 @@ const PRACTICE_FILTER_EMPTY_MESSAGES: Record<PracticeFilter, string> = {
 
 function buildWebAppUrl(): string | undefined {
   if (!PUBLIC_WEBAPP_URL) return undefined;
-  const trimmed = PUBLIC_WEBAPP_URL.endsWith("/")
-    ? PUBLIC_WEBAPP_URL.slice(0, -1)
-    : PUBLIC_WEBAPP_URL;
-  return `${trimmed}/practice?session=practice`;
+
+  try {
+    const url = new URL(PUBLIC_WEBAPP_URL);
+    const normalizedPath = url.pathname.replace(/\/+$/, "");
+    if (!normalizedPath || normalizedPath === "/") {
+      url.pathname = "/practice";
+    } else {
+      url.pathname = normalizedPath;
+    }
+    if (!url.searchParams.has("session")) {
+      url.searchParams.set("session", "practice");
+    }
+    return url.toString();
+  } catch {
+    const trimmed = PUBLIC_WEBAPP_URL.replace(/\/+$/, "");
+    const base = trimmed.endsWith("/practice") ? trimmed : `${trimmed}/practice`;
+    return `${base}?session=practice`;
+  }
 }
 
 async function startInlinePractice(
