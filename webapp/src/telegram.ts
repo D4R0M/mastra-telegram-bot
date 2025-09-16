@@ -1,5 +1,8 @@
 import type { TelegramWebApp } from "./types";
 
+const INIT_DATA_STORAGE_KEY = "mastra:practice:init-data";
+
+let cachedInitData: string | null = null;
 let mainButtonHandler: (() => void) | null = null;
 let backButtonHandler: (() => void) | null = null;
 let themeListener: (() => void) | null = null;
@@ -8,8 +11,78 @@ function getWebApp(): TelegramWebApp | undefined {
   return window.Telegram?.WebApp;
 }
 
+function persistInitData(value: string) {
+  cachedInitData = value;
+  try {
+    window.sessionStorage.setItem(INIT_DATA_STORAGE_KEY, value);
+  } catch {
+    try {
+      window.localStorage.setItem(INIT_DATA_STORAGE_KEY, value);
+    } catch {
+      // ignore storage errors (private mode, quota, etc.)
+    }
+  }
+}
+
+function readPersistedInitData(): string | null {
+  try {
+    const fromSession = window.sessionStorage.getItem(INIT_DATA_STORAGE_KEY);
+    if (fromSession) {
+      return fromSession;
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  try {
+    return window.localStorage.getItem(INIT_DATA_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function extractInitDataFromLocation(): string | null {
+  const parse = (value: string | null | undefined) => {
+    if (!value) return null;
+    const trimmed = value.startsWith("?") || value.startsWith("#") ? value.slice(1) : value;
+    if (!trimmed) return null;
+    const params = new URLSearchParams(trimmed);
+    return (
+      params.get("tgWebAppData") ||
+      params.get("tg_web_app_data") ||
+      params.get("initData") ||
+      params.get("init_data") ||
+      null
+    );
+  };
+
+  return parse(window.location.hash) || parse(window.location.search);
+}
+
 export function getInitData(): string {
-  return getWebApp()?.initData ?? "";
+  if (cachedInitData) {
+    return cachedInitData;
+  }
+
+  const fromWebApp = getWebApp()?.initData;
+  if (fromWebApp && fromWebApp.length > 0) {
+    persistInitData(fromWebApp);
+    return fromWebApp;
+  }
+
+  const fromLocation = extractInitDataFromLocation();
+  if (fromLocation && fromLocation.length > 0) {
+    persistInitData(fromLocation);
+    return fromLocation;
+  }
+
+  const stored = readPersistedInitData();
+  if (stored) {
+    cachedInitData = stored;
+    return stored;
+  }
+
+  return "";
 }
 
 export function applyTheme(webApp: TelegramWebApp | undefined = getWebApp()) {
@@ -35,6 +108,10 @@ export function initTelegram(onBack?: () => void) {
   const webApp = getWebApp();
   if (!webApp) {
     return;
+  }
+
+  if (webApp.initData && webApp.initData.length > 0) {
+    persistInitData(webApp.initData);
   }
 
   webApp.ready();
