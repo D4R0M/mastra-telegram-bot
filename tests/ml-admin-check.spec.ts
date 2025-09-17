@@ -23,6 +23,7 @@ vi.mock("../src/db/reviewEvents.ts", () => ({
 
 vi.mock("../src/ml/shouldLogML.ts", () => ({
   shouldLogML: () => true,
+  isMlHashSaltConfigured: () => true,
 }));
 
 import handleCheckMlLogCommand from "../src/mastra/commands/checkMLLog.js";
@@ -49,6 +50,7 @@ describe("check_ml_log command", () => {
     const payload = JSON.parse(jsonText);
 
     expect(payload.envEnabled).toBe(true);
+    expect(payload.hashSaltConfigured).toBe(true);
     expect(payload.totalEventsForUser).toBe(12);
     expect(payload.lastEventTs).toBe("2024-01-01T00:00:00.000Z");
   });

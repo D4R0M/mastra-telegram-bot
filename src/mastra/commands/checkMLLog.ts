@@ -2,7 +2,10 @@ import type { CommandResponse } from "../commandTypes.js";
 import { isAdmin } from "../authorization.js";
 import { fetchLatestEvent, countEventsForUser } from "../../db/reviewEvents.js";
 import { hashUserId } from "../../lib/mlPrivacy.js";
-import { shouldLogML } from "../../ml/shouldLogML.js";
+import {
+  shouldLogML,
+  isMlHashSaltConfigured,
+} from "../../ml/shouldLogML.js";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>]/g, (match) => {
@@ -59,6 +62,7 @@ export default async function handleCheckMlLogCommand(
 
     const payload = {
       envEnabled: shouldLogML(),
+      hashSaltConfigured: isMlHashSaltConfigured(),
       lastEventTs: latest?.ts ?? null,
       totalEventsForUser,
     };

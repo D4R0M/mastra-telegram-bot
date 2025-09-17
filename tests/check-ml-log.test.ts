@@ -13,6 +13,7 @@ vi.mock("../src/db/reviewEvents.ts", () => ({
 
 vi.mock("../src/ml/shouldLogML.ts", () => ({
   shouldLogML: vi.fn(),
+  isMlHashSaltConfigured: vi.fn(),
 }));
 
 import { isAdmin } from "../src/mastra/authorization.ts";
@@ -20,7 +21,10 @@ import {
   fetchLatestEvent,
   countEventsForUser,
 } from "../src/db/reviewEvents.ts";
-import { shouldLogML } from "../src/ml/shouldLogML.ts";
+import {
+  shouldLogML,
+  isMlHashSaltConfigured,
+} from "../src/ml/shouldLogML.ts";
 import handleCheckMlLogCommand from "../src/mastra/commands/checkMLLog.ts";
 
 function extractJson(response: string): any {
@@ -53,6 +57,7 @@ describe("/check_ml_log command", () => {
   it("returns status summary for admins", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
     vi.mocked(shouldLogML).mockReturnValue(true);
+    vi.mocked(isMlHashSaltConfigured).mockReturnValue(true);
     vi.mocked(fetchLatestEvent).mockResolvedValue({
       ts: new Date("2025-09-01T10:00:00Z"),
       mode: "webapp_practice",
@@ -80,6 +85,7 @@ describe("/check_ml_log command", () => {
     const payload = extractJson(result.response);
     expect(payload).toMatchObject({
       envEnabled: true,
+      hashSaltConfigured: true,
       totalEventsForUser: 42,
     });
     expect(payload.lastEventTs).toBe("2025-09-01T10:00:00.000Z");
@@ -88,6 +94,7 @@ describe("/check_ml_log command", () => {
   it("handles downstream errors", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
     vi.mocked(shouldLogML).mockReturnValue(false);
+    vi.mocked(isMlHashSaltConfigured).mockReturnValue(false);
     vi.mocked(fetchLatestEvent).mockRejectedValue(new Error("db down"));
 
     const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
