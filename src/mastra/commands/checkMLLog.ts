@@ -1,7 +1,8 @@
 import type { CommandResponse } from "../commandTypes.js";
 import { isAdmin } from "../authorization.js";
-import { fetch24hTotals, fetchLatestEvent, fetchOptOutCount } from "../../db/reviewEvents.js";
-import { isMlLoggingEnabled } from "../../lib/mlPrivacy.js";
+import { fetchLatestEvent, countEventsForUser } from "../../db/reviewEvents.js";
+import { hashUserId } from "../../lib/mlPrivacy.js";
+import { shouldLogML } from "../../ml/shouldLogML.js";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>]/g, (match) => {
@@ -18,9 +19,14 @@ function escapeHtml(value: string): string {
   });
 }
 
+function parseUserId(raw: string): string | null {
+  const match = raw.match(/user:(\d+)/i);
+  return match ? match[1] : null;
+}
+
 export default async function handleCheckMlLogCommand(
   _params: string[],
-  _rawParams: string,
+  rawParams: string,
   userId: string,
   _state?: unknown,
   mastra?: any,
@@ -35,25 +41,34 @@ export default async function handleCheckMlLogCommand(
   }
 
   try {
-    const [totals, latest, optOutCount] = await Promise.all([
-      fetch24hTotals(),
-      fetchLatestEvent(),
-      fetchOptOutCount(),
-    ]);
+    const latest = await fetchLatestEvent();
+    const userParam = parseUserId(rawParams);
+
+    let totalEventsForUser = 0;
+    if (userParam) {
+      try {
+        const hash = hashUserId(userParam);
+        totalEventsForUser = await countEventsForUser(hash);
+      } catch (error) {
+        logger?.warn?.("check_ml_log_user_hash_failed", {
+          requested_user: userParam,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     const payload = {
-      logging_enabled: isMlLoggingEnabled(),
-      opted_out_users: optOutCount,
-      totals_24h: totals,
-      latest_event: latest,
+      envEnabled: shouldLogML(),
+      lastEventTs: latest?.ts ?? null,
+      totalEventsForUser,
     };
 
     const jsonBody = escapeHtml(JSON.stringify(payload, null, 2));
 
     logger?.info?.("check_ml_log_summary", {
-      totals,
-      opted_out_users: optOutCount,
-      has_latest: Boolean(latest),
+      env_enabled: payload.envEnabled,
+      last_event_ts: payload.lastEventTs,
+      total_events_for_user: totalEventsForUser,
     });
 
     return {

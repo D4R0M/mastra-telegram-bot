@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  fetchMlPrivacyStatus,
-  fetchNextCard,
-  sendPracticeHint,
-  submitReview,
-  updateMlPrivacyStatus,
-} from "./api";
+import { fetchNextCard, sendPracticeHint, submitReview } from "./api";
 import {
   configureMainButton,
   hideMainButton,
@@ -68,10 +62,6 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(
     null,
   );
-  const [privacy, setPrivacy] = useState<MlPrivacyStatus | null>(null);
-  const [privacyLoading, setPrivacyLoading] = useState<boolean>(true);
-  const [privacyUpdating, setPrivacyUpdating] = useState<boolean>(false);
-
   const completed = useMemo(() => {
     if (!totalDue) return 0;
     return Math.max(totalDue - remainingDue, 0);
@@ -95,22 +85,6 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  useEffect(() => {
-    let active = true;
-    fetchMlPrivacyStatus()
-      .then((status) => {
-        if (active) setPrivacy(status);
-      })
-      .catch(() => {
-        if (active) setPrivacy(null);
-      })
-      .finally(() => {
-        if (active) setPrivacyLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const loadNextCard = useCallback(async (overrideSession?: string | null) => {
     try {
@@ -296,25 +270,6 @@ export default function App() {
     loadNextCard();
   }, [loadNextCard]);
 
-  const handlePrivacyToggle = useCallback(async () => {
-    if (privacyUpdating || privacyLoading || !privacy) {
-      return;
-    }
-    setPrivacyUpdating(true);
-    try {
-      const next = await updateMlPrivacyStatus(!privacy.optedOut);
-      setPrivacy(next);
-      showToast(
-        next.optedOut ? "ML logging disabled" : "ML logging enabled",
-        "success",
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update privacy";
-      showToast(message, "error");
-    } finally {
-      setPrivacyUpdating(false);
-    }
-  }, [privacy, privacyLoading, privacyUpdating, showToast]);
 
   return (
     <div className="app">
@@ -329,28 +284,11 @@ export default function App() {
         </div>
         <div className="privacy-controls">
           <div className="app__counter">Due: {remainingDue}</div>
-          {privacyLoading ? (
-            <span className="privacy-controls__note">Loading privacy...</span>
-          ) : privacy ? (
-            <>
-              <button
-                className="secondary"
-                onClick={handlePrivacyToggle}
-                disabled={privacyUpdating}
-              >
-                {privacy.optedOut ? "Enable ML logging" : "Disable ML logging"}
-              </button>
-              <span className="privacy-controls__note">
-                {privacy.loggingEnabled
-                  ? privacy.optedOut
-                    ? "Logging paused for you"
-                    : "Logging enabled"
-                  : "Logging disabled globally"}
-              </span>
-            </>
-          ) : (
-            <span className="privacy-controls__note">Privacy status unavailable</span>
-          )}
+          <span className="privacy-controls__note">
+            {remainingDue > 0
+              ? `Keep going - ${remainingDue} ${remainingDue === 1 ? "card" : "cards"} left`
+              : "All caught up!"}
+          </span>
         </div>
       </header>
 

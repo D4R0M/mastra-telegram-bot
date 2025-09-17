@@ -79,11 +79,6 @@ export interface HintPayload {
   source?: string | null;
 }
 
-export interface MlPrivacyStatus {
-  optedOut: boolean;
-  loggingEnabled: boolean;
-}
-
 export interface TelegramThemeParams {
   bg_color?: string;
   text_color?: string;

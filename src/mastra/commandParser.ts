@@ -340,7 +340,7 @@ async function handleReviewSessionFlow(
           userId,
           card_id: card.card_id || card.id,
           sm2_before: state.data.ml_sm2_before ?? null,
-          client: "telegram",
+          client: "bot",
           source: state.data.ml_source ?? "practice_inline",
           logger,
         });
@@ -424,7 +424,7 @@ async function handleReviewSessionFlow(
             answer_text: userAnswer,
             is_correct: isExactForLog ? true : overlapForLog >= 0.5 ? null : false,
             sm2_before: state.data.ml_sm2_before ?? null,
-            client: "telegram",
+            client: "bot",
             source: state.data.ml_source ?? "practice_inline",
             logger,
           });
@@ -528,7 +528,7 @@ async function handleReviewSessionFlow(
             session_id: state.data.session_id,
             position_in_session: state.data.current_index,
             mode: "telegram_inline",
-            client: "telegram",
+            client: "bot",
             source: mlSource,
             attempt: attemptForSubmit,
             hint_count: hintCount,
@@ -598,7 +598,7 @@ async function handleReviewSessionFlow(
                   userId,
                   card_id: nextCardDetails.id ?? nextCardId,
                   sm2_before: nextSm2,
-                  client: "telegram",
+                  client: "bot",
                   source: mlSource,
                   logger,
                 });

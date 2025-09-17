@@ -4,9 +4,8 @@ import { closePool } from "../src/db/client.js";
 import {
   fetch24hTotals,
   fetchEventsLast7d,
-  fetchOptOutCount,
 } from "../src/db/reviewEvents.js";
-import { isMlLoggingEnabled } from "../src/lib/mlPrivacy.js";
+import { shouldLogML } from "../src/ml/shouldLogML.js";
 
 function printSection(title: string) {
   console.log(`\n=== ${title} ===`);
@@ -14,15 +13,12 @@ function printSection(title: string) {
 
 async function main() {
   try {
-    const [totals24h, last7d, optOutCount] = await Promise.all([
+    const [totals24h, last7d] = await Promise.all([
       fetch24hTotals(),
       fetchEventsLast7d(),
-      fetchOptOutCount(),
     ]);
 
-    console.log("ML logging enabled:", isMlLoggingEnabled());
-    console.log("Opted-out users:", optOutCount);
-
+    console.log("ML logging enabled:", shouldLogML());
     printSection("Last 24h by mode");
     if (!totals24h.length) {
       console.log("(no events recorded)");

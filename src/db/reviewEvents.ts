@@ -24,13 +24,20 @@ export async function insertReviewEvent(
       answer_text,
       sm2_before,
       sm2_after,
+      ease_before,
+      ease_after,
+      reps_before,
+      reps_after,
+      interval_before,
+      interval_after,
       client,
       app_version,
       source
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7,
       $8, $9, $10, $11, $12, $13,
-      $14, $15, $16, $17, $18
+      $14, $15, $16, $17, $18, $19, $20,
+      $21, $22, $23
     )`,
     [
       event.ts ?? null,
@@ -48,11 +55,27 @@ export async function insertReviewEvent(
       event.answer_text ?? null,
       event.sm2_before ? JSON.stringify(event.sm2_before) : null,
       event.sm2_after ? JSON.stringify(event.sm2_after) : null,
-      event.client ?? null,
+      event.ease_before ?? null,
+      event.ease_after ?? null,
+      event.reps_before ?? null,
+      event.reps_after ?? null,
+      event.interval_before ?? null,
+      event.interval_after ?? null,
+      event.client ?? "bot",
       event.app_version ?? null,
       event.source ?? null,
     ],
   );
+}
+
+
+export async function countEventsForUser(userHash: string): Promise<number> {
+  const pool = getPool();
+  const result = await pool.query<{ count: string }>(
+    SELECT COUNT(*)::BIGINT AS count FROM review_events WHERE user_hash = ,
+    [userHash],
+  );
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 export interface ReviewEventSample {
@@ -100,15 +123,6 @@ export async function fetch24hTotals(): Promise<Ml24hTotals[]> {
     graded: Number(row.graded) || 0,
     accuracy: row.accuracy === null ? null : Number(row.accuracy),
   }));
-}
-
-export async function fetchOptOutCount(): Promise<number> {
-  const pool = getPool();
-  const result = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::BIGINT AS count FROM ml_opt_outs`,
-  );
-  const raw = result.rows[0]?.count;
-  return raw ? Number(raw) : 0;
 }
 
 export async function fetchLatestEvent(): Promise<ReviewEventSample | null> {

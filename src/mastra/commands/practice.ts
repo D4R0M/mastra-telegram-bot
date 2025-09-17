@@ -188,7 +188,7 @@ Filter: ${PRACTICE_FILTER_LABELS[filter]}`
         userId,
         card_id: card.id,
         sm2_before: startResult.sm2 ?? null,
-        client: "telegram",
+        client: "bot",
         source: mlSource,
         logger,
       });

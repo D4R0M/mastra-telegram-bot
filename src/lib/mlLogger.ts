@@ -1,12 +1,11 @@
 import type { IMastraLogger } from "@mastra/core/logger";
 import { insertReviewEvent } from "../db/reviewEvents.js";
 import type { ReviewEvent, ReviewMode, ReviewAction, Sm2Snapshot } from "../types/ml.js";
+import { shouldLogML } from "../ml/shouldLogML.js";
 import {
   getAppVersion,
   hashUserId,
-  isMlLoggingEnabled,
   redactAnswerText,
-  shouldLogMlEvents,
 } from "./mlPrivacy.js";
 
 export interface LogReviewEventArgs {
@@ -52,11 +51,7 @@ function resolveUserHash(args: LogReviewEventArgs): string | undefined {
 export async function logReviewEvent(
   args: LogReviewEventArgs,
 ): Promise<void> {
-  if (!isMlLoggingEnabled()) {
-    return;
-  }
-
-  if (args.userId !== undefined && !(await shouldLogMlEvents(args.userId))) {
+  if (!shouldLogML()) {
     return;
   }
 
@@ -67,6 +62,12 @@ export async function logReviewEvent(
 
   const appVersion = args.app_version ?? getAppVersion();
   const sanitizedAnswer = redactAnswerText(args.answer_text);
+  const easeBefore = args.sm2_before?.ease ?? null;
+  const easeAfter = args.sm2_after?.ease ?? null;
+  const repsBefore = args.sm2_before?.reps ?? null;
+  const repsAfter = args.sm2_after?.reps ?? null;
+  const intervalBefore = args.sm2_before?.interval ?? null;
+  const intervalAfter = args.sm2_after?.interval ?? null;
   const payload: ReviewEvent = {
     ts: args.ts ?? new Date(),
     mode: args.mode,
@@ -83,7 +84,13 @@ export async function logReviewEvent(
     answer_text: sanitizedAnswer,
     sm2_before: args.sm2_before ?? null,
     sm2_after: args.sm2_after ?? null,
-    client: args.client ?? null,
+    ease_before: easeBefore,
+    ease_after: easeAfter,
+    reps_before: repsBefore,
+    reps_after: repsAfter,
+    interval_before: intervalBefore,
+    interval_after: intervalAfter,
+    client: args.client ?? "bot",
     app_version: appVersion ?? null,
     source: args.source ?? null,
   };

@@ -23,7 +23,7 @@ WHERE r.card_id = c.id AND r.user_id IS NULL;
 UPDATE review_events re
 SET user_id = c.owner_id::BIGINT
 FROM cards c
-WHERE re.card_id = c.id AND re.user_id IS NULL;
+WHERE re.card_id = c.id::text AND re.user_id IS NULL;
 
 -- Enforce non-nullability now that backfill is complete
 ALTER TABLE review_events ALTER COLUMN user_id SET NOT NULL;
@@ -93,3 +93,4 @@ BEGIN
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE;
     END IF;
 END $$;
+

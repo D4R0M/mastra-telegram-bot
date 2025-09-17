@@ -1,3 +1,4 @@
+import type { DueSummary as DueSummaryData } from "../../services/srs/getDueSummary.js";
 export type Stats = {
   totalCards: number;
   dueToday: number;
@@ -62,42 +63,31 @@ export function fmtStatsHTML(s: Stats) {
   ].join("\n");
 }
 
-export type DueSummary = {
-  total: number;
-  dueToday: number;
-  dueTomorrow: number;
-  new: number;
-  learning: number;
-  review: number;
-  overdue: number;
-};
+export type DueSummary = DueSummaryData;
 
 export function fmtDueHTML(d: DueSummary) {
-  const loadTotal = d.dueToday + d.overdue;
-  const loadPct = loadTotal ? d.dueToday / loadTotal : 0;
-  const loadBar = bar(loadPct, 10, "■", "□");
+  const loadBar = bar(d.loadPct, 10, "#", "-");
+  const totalDue = d.dueToday + d.overdueCount;
   const lines = [
-    "📊 <b>Cards Due for Review</b>",
+    "<b>Cards Due for Review</b>",
     "",
-    `🃏 Total: ${d.total}`,
-    `✅ Due Today: ${d.dueToday}`,
-    `📅 Due Tomorrow: ${d.dueTomorrow}`,
-    `🆕 New Cards: ${d.new}`,
+    `Total cards: ${d.total}`,
+    `Due today: ${d.dueToday}`,
+    `Due tomorrow: ${d.dueTomorrow}`,
+    `New cards: ${d.newCount}`,
     "",
-    `📖 Learning: ${d.learning}`,
-    `🔁 Review: ${d.review}`,
-    `⚠️ Overdue: ${d.overdue}`,
+    `Learning: ${d.learningCount}`,
+    `Review: ${d.reviewCount}`,
+    `Overdue: ${d.overdueCount}`,
     "",
-    "<b>Today's Load</b>",
-    `<code>${loadBar}</code> ${pctStr(loadPct)}`,
+    "<b>Today's load</b>",
+    `<code>${loadBar}</code> ${pctStr(d.loadPct)}`,
+    `Reviews completed today: ${d.reviewedToday}`,
   ];
-  if (d.dueToday > 0) {
-    lines.push(
-      "",
-      `✨ Great job keeping up! Finish ${d.dueToday} reviews today to stay on track.`,
-    );
+  if (totalDue > 0) {
+    lines.push("", `Finish ${totalDue} more reviews to stay on track.`);
   } else {
-    lines.push("", "✨ All caught up! No cards due today.");
+    lines.push("", "All caught up! No cards due today.");
   }
   return lines.join("\n");
 }

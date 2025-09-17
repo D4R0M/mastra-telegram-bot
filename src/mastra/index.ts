@@ -27,9 +27,7 @@ import {
   createPracticeHintHandler,
   createPracticeNextHandler,
   createPracticeSubmitHandler,
-  createPracticeWebAppHandler,
-  createMlPrivacyStatusHandler,
-  createMlPrivacyUpdateHandler,
+  createPracticeWebAppHandler
 } from "../server/routes/practice.js";
 import {
   addCardTool,
@@ -362,16 +360,7 @@ export const mastra = new Mastra({
               createHandler: async ({ mastra }) =>
                 createPracticeHintHandler(mastra),
             },
-            {
-              path: "/api/ml/privacy",
-              method: "GET",
-              createHandler: async () => createMlPrivacyStatusHandler(),
-            },
-            {
-              path: "/api/ml/privacy",
-              method: "POST",
-              createHandler: async () => createMlPrivacyUpdateHandler(),
-            },
+
             {
               path: "/practice",
               method: "GET",

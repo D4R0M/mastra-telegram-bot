@@ -3,20 +3,14 @@ import path from "node:path";
 
 import { requireTelegramWebAppAuth } from "../webappInit.js";
 import { buildToolExecCtx } from "../../mastra/context.js";
+import { getDueSummary } from "../../services/srs/getDueSummary.js";
 import {
   getDueCardsTool,
   startReviewTool,
   submitReviewTool,
 } from "../../mastra/tools/reviewTools.js";
-import { getDueCardsStatsTool } from "../../mastra/tools/statisticsTools.js";
 import { logReviewEvent } from "../../lib/mlLogger.js";
-import {
-  clearUserOptOut,
-  hashUserId,
-  isMlLoggingEnabled,
-  isUserOptedOut,
-  setUserOptOut,
-} from "../../lib/mlPrivacy.js";
+import { hashUserId } from "../../lib/mlPrivacy.js";
 import type { Sm2Snapshot } from "../../types/ml.js";
 
 type Handler = (c: any) => Promise<any>;
@@ -284,19 +278,8 @@ async function fetchDueCount(
   userId: number,
 ): Promise<number> {
   try {
-    const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
-      requestId: userId,
-      spanName: "practice_due_stats",
-    });
-    const stats = await getDueCardsStatsTool.execute({
-      context: { owner_id: userId, timezone: "UTC" },
-      runtimeContext,
-      tracingContext,
-      mastra,
-    });
-    if (stats.success) {
-      return stats.stats.due_cards;
-    }
+    const summary = await getDueSummary(userId);
+    return summary.dueToday + summary.overdueCount;
   } catch (error) {
     mastra?.getLogger?.()?.warn("practice_due_count_failed", {
       user_id: userId,
@@ -305,6 +288,7 @@ async function fetchDueCount(
   }
   return 0;
 }
+
 
 export function createPracticeNextHandler(mastra: any): Handler {
   return requireTelegramWebAppAuth(async (c, auth) => {
@@ -381,7 +365,7 @@ export function createPracticeNextHandler(mastra: any): Handler {
         userId,
         card_id: startResult.card.id,
         sm2_before: sm2Before,
-        client: "web",
+        client: "miniapp",
         source: sourceKey,
         logger,
       });
@@ -484,7 +468,7 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
             card_id: cardId,
             answer_text: answerText ?? null,
             sm2_before: sm2BeforePayload,
-            client: "web",
+            client: "miniapp",
             source: sourceKey,
             logger,
           });
@@ -498,7 +482,7 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
             start_time: startTime,
             session_id: sessionIdentifier,
             mode: "webapp_practice",
-            client: "web",
+            client: "miniapp",
             source: sourceKey ?? undefined,
             attempt: attemptValue ?? undefined,
             hint_count: hintCountValue ?? undefined,
@@ -595,7 +579,7 @@ export function createPracticeHintHandler(mastra: any): Handler {
         userId: auth.tgUser.id,
         card_id: cardId,
         sm2_before: sm2Before,
-        client: "web",
+        client: "miniapp",
         source: sourceKey,
         logger,
       });
@@ -609,49 +593,6 @@ export function createPracticeHintHandler(mastra: any): Handler {
     }
   });
 }
-
-export function createMlPrivacyStatusHandler(): Handler {
-  return requireTelegramWebAppAuth(async (c, auth) => {
-    try {
-      const optedOut = await isUserOptedOut(auth.tgUser.id);
-      const enabled = isMlLoggingEnabled();
-      return c.json({ optedOut, loggingEnabled: enabled }, 200);
-    } catch (error) {
-      const logger = c?.get?.("mastra")?.getLogger?.();
-      logger?.warn("ml_privacy_status_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return c.json({ error: "Unable to fetch privacy status" }, 500);
-    }
-  });
-}
-
-export function createMlPrivacyUpdateHandler(): Handler {
-  return requireTelegramWebAppAuth(async (c, auth) => {
-    const logger = c?.get?.("mastra")?.getLogger?.();
-    try {
-      const payload = await c.req.json();
-      if (typeof payload?.optedOut !== "boolean") {
-        return c.json({ error: "optedOut boolean required" }, 400);
-      }
-
-      if (payload.optedOut) {
-        await setUserOptOut(auth.tgUser.id, payload?.source ?? "webapp_toggle");
-      } else {
-        await clearUserOptOut(auth.tgUser.id);
-      }
-
-      const enabled = isMlLoggingEnabled();
-      return c.json({ optedOut: payload.optedOut, loggingEnabled: enabled }, 200);
-    } catch (error) {
-      logger?.warn?.("ml_privacy_update_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return c.json({ error: "Unable to update privacy preference" }, 500);
-    }
-  });
-}
-
 
 export function __resetPracticeRateLimit() {
   submitBuckets.clear();

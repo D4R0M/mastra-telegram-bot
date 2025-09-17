@@ -1,6 +1,5 @@
 import type {
   HintPayload,
-  MlPrivacyStatus,
   NextCardResponse,
   SubmitPayload,
   SubmitResponse,
@@ -96,40 +95,3 @@ export async function sendPracticeHint(payload: HintPayload): Promise<void> {
     throw new Error(message || "Hint failed");
   }
 }
-
-export async function fetchMlPrivacyStatus(): Promise<MlPrivacyStatus> {
-  const initData = getInitData();
-  if (!initData) {
-    throw new Error("Missing Telegram init data");
-  }
-
-  const response = await fetch(buildUrl("/api/ml/privacy"), {
-    method: "GET",
-    headers: {
-      "X-Telegram-Init-Data": initData,
-    },
-  });
-
-  return handleResponse<MlPrivacyStatus>(response);
-}
-
-export async function updateMlPrivacyStatus(
-  optedOut: boolean,
-): Promise<MlPrivacyStatus> {
-  const initData = getInitData();
-  if (!initData) {
-    throw new Error("Missing Telegram init data");
-  }
-
-  const response = await fetch(buildUrl("/api/ml/privacy"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Telegram-Init-Data": initData,
-    },
-    body: JSON.stringify({ optedOut }),
-  });
-
-  return handleResponse<MlPrivacyStatus>(response);
-}
-

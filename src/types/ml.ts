@@ -24,6 +24,12 @@ export interface ReviewEvent {
   answer_text?: string | null;
   sm2_before?: Sm2Snapshot | null;
   sm2_after?: Sm2Snapshot | null;
+  ease_before?: number | null;
+  ease_after?: number | null;
+  reps_before?: number | null;
+  reps_after?: number | null;
+  interval_before?: number | null;
+  interval_after?: number | null;
   client?: string | null;
   app_version?: string | null;
   source?: string | null;

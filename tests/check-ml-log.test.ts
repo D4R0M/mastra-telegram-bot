@@ -1,26 +1,26 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+process.env.ML_HASH_SALT = "test-salt";
+
 vi.mock("../src/mastra/authorization.ts", () => ({
   isAdmin: vi.fn(),
 }));
 
 vi.mock("../src/db/reviewEvents.ts", () => ({
-  fetch24hTotals: vi.fn(),
   fetchLatestEvent: vi.fn(),
-  fetchOptOutCount: vi.fn(),
+  countEventsForUser: vi.fn(),
 }));
 
-vi.mock("../src/lib/mlPrivacy.ts", () => ({
-  isMlLoggingEnabled: vi.fn(),
+vi.mock("../src/ml/shouldLogML.ts", () => ({
+  shouldLogML: vi.fn(),
 }));
 
 import { isAdmin } from "../src/mastra/authorization.ts";
 import {
-  fetch24hTotals,
   fetchLatestEvent,
-  fetchOptOutCount,
+  countEventsForUser,
 } from "../src/db/reviewEvents.ts";
-import { isMlLoggingEnabled } from "../src/lib/mlPrivacy.ts";
+import { shouldLogML } from "../src/ml/shouldLogML.ts";
 import handleCheckMlLogCommand from "../src/mastra/commands/checkMLLog.ts";
 
 function extractJson(response: string): any {
@@ -47,16 +47,12 @@ describe("/check_ml_log command", () => {
 
     expect(result.response).toBe("Not authorized.");
     expect(result.parse_mode).toBe("HTML");
-    expect(fetch24hTotals).not.toHaveBeenCalled();
+    expect(fetchLatestEvent).not.toHaveBeenCalled();
   });
 
-  it("returns aggregated JSON when admin", async () => {
+  it("returns status summary for admins", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
-    vi.mocked(isMlLoggingEnabled).mockReturnValue(true);
-    vi.mocked(fetch24hTotals).mockResolvedValue([
-      { mode: "telegram_inline", events: 5, graded: 3, accuracy: 0.6 },
-      { mode: "webapp_practice", events: 7, graded: 5, accuracy: 0.7 },
-    ]);
+    vi.mocked(shouldLogML).mockReturnValue(true);
     vi.mocked(fetchLatestEvent).mockResolvedValue({
       ts: new Date("2025-09-01T10:00:00Z"),
       mode: "webapp_practice",
@@ -66,28 +62,33 @@ describe("/check_ml_log command", () => {
       grade: 4,
       is_correct: true,
       latency_ms: 1200,
-      client: "web",
+      client: "miniapp",
     });
-    vi.mocked(fetchOptOutCount).mockResolvedValue(2);
+    vi.mocked(countEventsForUser).mockResolvedValue(42);
 
-    const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
-      getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
-    });
+    const result = await handleCheckMlLogCommand(
+      [],
+      "user:9001",
+      "9001",
+      undefined,
+      {
+        getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+      },
+    );
 
     expect(result.parse_mode).toBe("HTML");
     const payload = extractJson(result.response);
     expect(payload).toMatchObject({
-      logging_enabled: true,
-      opted_out_users: 2,
+      envEnabled: true,
+      totalEventsForUser: 42,
     });
-    expect(payload.totals_24h).toHaveLength(2);
-    expect(payload.latest_event.mode).toBe("webapp_practice");
+    expect(payload.lastEventTs).toBe("2025-09-01T10:00:00.000Z");
   });
 
   it("handles downstream errors", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
-    vi.mocked(isMlLoggingEnabled).mockReturnValue(false);
-    vi.mocked(fetch24hTotals).mockRejectedValue(new Error("db down"));
+    vi.mocked(shouldLogML).mockReturnValue(false);
+    vi.mocked(fetchLatestEvent).mockRejectedValue(new Error("db down"));
 
     const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
       getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),

@@ -1,78 +1,73 @@
 import type { CommandResponse, ConversationState } from "../commandTypes.js";
-import { buildToolExecCtx } from "../context.js";
-import { getDueCardsStatsTool } from "../tools/statisticsTools.js";
 import { fmtDueHTML, type DueSummary } from "../ui/format.js";
+import { getDueSummary } from "../../services/srs/getDueSummary.js";
+
+function toUserId(value: string): number | null {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
+function compactSummary(summary: DueSummary): string {
+  const totalDue = summary.dueToday + summary.overdueCount;
+  return `Today: ${summary.dueToday} due | ${summary.overdueCount} overdue | ${summary.reviewedToday} done � /practice (${totalDue} left)`;
+}
 
 export default async function handleDueCommand(
   params: string[],
-  rawParams: string,
+  _rawParams: string,
   userId: string,
-  state?: ConversationState,
+  _state?: ConversationState,
   mastra?: any,
 ): Promise<CommandResponse> {
-  const logger = mastra?.getLogger();
+  const logger = mastra?.getLogger?.();
+  const numericId = toUserId(userId);
+
+  if (numericId === null) {
+    logger?.warn?.("due_command_invalid_user", { user_id: userId });
+    return {
+      response: "Could not determine your account id.",
+      parse_mode: "HTML",
+    };
+  }
 
   try {
-    const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
-      requestId: userId,
-    });
-    const result = await getDueCardsStatsTool.execute({
-      context: {
-        owner_id: userId,
-        timezone: "Europe/Stockholm",
-      },
-      runtimeContext,
-      tracingContext,
-      mastra,
-    });
+    const summary = await getDueSummary(numericId);
 
-    if (result.success && result.stats) {
-      const s = result.stats;
-      const summary: DueSummary = {
-        total: s.total_cards,
-        dueToday: s.cards_due_today,
-        dueTomorrow: s.cards_due_tomorrow,
-        new: s.new_cards,
-        learning: s.learning_cards,
-        review: s.review_cards,
-        overdue: s.overdue_cards,
-      };
-
-      if (params[0] === "compact" || params[0] === "short") {
-        return {
-          response: `📊 Today: ${summary.dueToday} due | ${summary.new} new | ${summary.overdue} overdue → /practice`,
-          parse_mode: "HTML",
-        };
-      }
-
+    if (params[0] === "compact" || params[0] === "short") {
       return {
-        response: fmtDueHTML(summary),
-        parse_mode: "HTML",
-        inline_keyboard: {
-          inline_keyboard: [
-            [
-              { text: "▶️ Start Practice", callback_data: "practice_now" },
-              { text: "➕ Add Card", callback_data: "add_card" },
-              { text: "📂 Export", callback_data: "export:cards" },
-            ],
-            [
-              { text: "📖 Only Learning", callback_data: "practice_learning" },
-              { text: "🆕 Only New", callback_data: "practice_new" },
-              { text: "⚠️ Overdue", callback_data: "practice_overdue" },
-            ],
-          ],
-        },
-      };
-    } else {
-      return {
-        response: `❌ ${result.message || "Could not fetch due cards"}`,
+        response: compactSummary(summary),
         parse_mode: "HTML",
       };
     }
-  } catch (error) {
-    logger?.error("❌ [CommandParser] Error fetching due cards:", error);
+
     return {
-      response: "❌ Error fetching due cards. Please try again.",
+      response: fmtDueHTML(summary),
+      parse_mode: "HTML",
+      inline_keyboard: {
+        inline_keyboard: [
+          [
+            { text: "Start practice", callback_data: "practice_now" },
+            { text: "Add card", callback_data: "add_card" },
+            { text: "Export", callback_data: "export:cards" },
+          ],
+          [
+            { text: "Only learning", callback_data: "practice_learning" },
+            { text: "Only new", callback_data: "practice_new" },
+            { text: "Overdue", callback_data: "practice_overdue" },
+          ],
+        ],
+      },
+    };
+  } catch (error) {
+    logger?.error?.("due_command_failed", {
+      user_id: numericId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      response: "Error fetching due cards. Please try again.",
       parse_mode: "HTML",
     };
   }

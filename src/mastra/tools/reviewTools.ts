@@ -354,7 +354,7 @@ export const submitReviewTool = createTool({
       .optional()
       .describe("Source mode for ML logging"),
     client: z
-      .string()
+      .enum(["bot", "miniapp"])
       .optional()
       .describe("Client identifier for ML logging"),
     source: z
@@ -457,7 +457,7 @@ export const submitReviewTool = createTool({
       const sessionId =
         context.session_id ?? `session_${context.owner_id}_${Date.now()}`;
       const clientName =
-        context.client ?? (mode === "webapp_practice" ? "web" : "telegram");
+        context.client ?? (mode === "webapp_practice" ? "miniapp" : "bot");
       const attemptCount =
         context.attempt !== undefined ? Math.max(0, context.attempt) : null;
       const hintCount =
@@ -679,3 +679,4 @@ export const submitReviewTool = createTool({
     }
   },
 });
+

@@ -7,13 +7,14 @@ vi.mock("../../src/db/reviewEvents.ts", () => ({
     capturedEvents.push(event);
   }),
   fetch24hTotals: vi.fn(),
-  fetchOptOutCount: vi.fn(),
   fetchLatestEvent: vi.fn(),
 }));
 
+vi.mock("../../src/ml/shouldLogML.ts", () => ({
+  shouldLogML: () => true,
+}));
+
 vi.mock("../../src/lib/mlPrivacy.ts", () => ({
-  isMlLoggingEnabled: () => true,
-  shouldLogMlEvents: async () => true,
   hashUserId: (raw: string | number) => `hash-${raw}`,
   redactAnswerText: (text?: string | null) => {
     if (text == null) return null;
