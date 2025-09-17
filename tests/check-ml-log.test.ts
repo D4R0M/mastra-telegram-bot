@@ -94,6 +94,7 @@ describe("/check_ml_log command", () => {
     expect(payload.lastEventTs).toBe("2025-09-01T10:00:00.000Z");
     expect(info).toHaveBeenCalledWith("check_ml_log_summary", {
       env_enabled: true,
+      hash_salt_configured: true,
       last_event_ts: new Date("2025-09-01T10:00:00.000Z"),
       total_events_for_user: 42,
     });
@@ -121,6 +122,7 @@ describe("/check_ml_log command", () => {
 
     expect(info).toHaveBeenCalledWith("check_ml_log_summary", {
       env_enabled: false,
+      hash_salt_configured: false,
       last_event_ts: null,
     });
   });
