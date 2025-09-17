@@ -68,6 +68,22 @@ import {
 import { vocabularyWorkflow } from "./workflows/vocabularyWorkflow.js";
 import { reminderWorkflow } from "./workflows/reminderWorkflow.js";
 
+const MAX_SERVER_TIMEOUT_MS = 2_147_483_647;
+const DEFAULT_SERVER_TIMEOUT_MS = 30 * 60 * 1000;
+// Keep long-lived streaming endpoints (e.g. Inngest sync) alive beyond the default timeout.
+const serverTimeoutMs = (() => {
+  const raw = process.env.SERVER_TIMEOUT_MS ?? process.env.MASTRA_SERVER_TIMEOUT_MS;
+  if (!raw) {
+    return DEFAULT_SERVER_TIMEOUT_MS;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn("[Server] Ignoring invalid server timeout override", { value: raw });
+    return DEFAULT_SERVER_TIMEOUT_MS;
+  }
+  return Math.min(parsed, MAX_SERVER_TIMEOUT_MS);
+})();
+
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
 
@@ -251,6 +267,7 @@ export const mastra = new Mastra({
   server: {
     host: "0.0.0.0",
     port: parseInt(process.env.PORT || "3000"),
+    timeout: serverTimeoutMs,
     middleware: [
       corsMiddleware,
       async (c, next) => {
