@@ -44,3 +44,4 @@ Indexes exist on `(ts)`, `(user_hash, ts)` and `(mode, ts)` for analytics worklo
 ## Testing
 
 The Vitest suite contains dedicated tests under `tests/` verifying hashing, migrations, and both practice flows. Run `npm run test` (or `npm test`) to execute the suite after applying database migrations.
+

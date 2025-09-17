@@ -7,8 +7,8 @@ vi.mock("../src/mastra/authorization.ts", () => ({
 }));
 
 vi.mock("../src/db/reviewEvents.ts", () => ({
-  fetchLatestEvent: vi.fn(),
-  countEventsForUser: vi.fn(),
+  fetchRecentReviewEvents: vi.fn(),
+  countEvents: vi.fn(),
 }));
 
 vi.mock("../src/ml/shouldLogML.ts", () => ({
@@ -18,8 +18,8 @@ vi.mock("../src/ml/shouldLogML.ts", () => ({
 
 import { isAdmin } from "../src/mastra/authorization.ts";
 import {
-  fetchLatestEvent,
-  countEventsForUser,
+  fetchRecentReviewEvents,
+  countEvents,
 } from "../src/db/reviewEvents.ts";
 import {
   shouldLogML,
@@ -27,16 +27,15 @@ import {
 } from "../src/ml/shouldLogML.ts";
 import handleCheckMlLogCommand from "../src/mastra/commands/checkMLLog.ts";
 
-function extractJson(response: string): any {
-  const match = response.match(/<pre><code>([\s\S]+)<\/code><\/pre>/);
+function extractPre(response: string): string {
+  const match = response.match(/<pre>([\s\S]+)<\/pre>/);
   if (!match) {
-    throw new Error(`Response did not contain JSON payload: ${response}`);
+    throw new Error(`Response did not contain preformatted payload: ${response}`);
   }
-  const unescaped = match[1]
+  return match[1]
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&");
-  return JSON.parse(unescaped);
 }
 
 describe("/check_ml_log command", () => {
@@ -51,32 +50,46 @@ describe("/check_ml_log command", () => {
 
     expect(result.response).toBe("Not authorized.");
     expect(result.parse_mode).toBe("HTML");
-    expect(fetchLatestEvent).not.toHaveBeenCalled();
+    expect(fetchRecentReviewEvents).not.toHaveBeenCalled();
+    expect(countEvents).not.toHaveBeenCalled();
   });
 
-  it("returns status summary for admins", async () => {
+  it("returns a formatted summary for admins with user scope", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
     vi.mocked(shouldLogML).mockReturnValue(true);
     vi.mocked(isMlHashSaltConfigured).mockReturnValue(true);
-    vi.mocked(fetchLatestEvent).mockResolvedValue({
-      ts: new Date("2025-09-01T10:00:00Z"),
-      mode: "webapp_practice",
-      action: "graded",
-      session_id: "session-1",
-      card_id: "card-1",
-      grade: 4,
-      is_correct: true,
-      latency_ms: 1200,
-      client: "miniapp",
-    });
-    vi.mocked(countEventsForUser).mockResolvedValue(42);
+    vi.mocked(fetchRecentReviewEvents).mockResolvedValue([
+      {
+        ts: new Date("2025-09-01T10:00:00Z"),
+        mode: "webapp_practice",
+        action: "graded",
+        session_id: "practice_9001_1758062745383",
+        card_id: "card-1",
+        grade: 4,
+        is_correct: true,
+        latency_ms: 1200,
+        client: "miniapp",
+      },
+      {
+        ts: new Date("2025-09-01T09:55:00Z"),
+        mode: "webapp_practice",
+        action: "graded",
+        session_id: "practice_9001_1758062500000",
+        card_id: "card-2",
+        grade: 3,
+        is_correct: true,
+        latency_ms: 950,
+        client: "miniapp",
+      },
+    ]);
+    vi.mocked(countEvents).mockResolvedValue(11);
 
     const info = vi.fn();
     const logger = { info, warn: vi.fn(), error: vi.fn() };
 
     const result = await handleCheckMlLogCommand(
       [],
-      "user:9001",
+      "user:9001 limit:2",
       "9001",
       undefined,
       {
@@ -85,26 +98,44 @@ describe("/check_ml_log command", () => {
     );
 
     expect(result.parse_mode).toBe("HTML");
-    const payload = extractJson(result.response);
-    expect(payload).toMatchObject({
-      envEnabled: true,
-      hashSaltConfigured: true,
-      totalEventsForUser: 42,
-    });
-    expect(payload.lastEventTs).toBe("2025-09-01T10:00:00.000Z");
-    expect(info).toHaveBeenCalledWith("check_ml_log_summary", {
-      env_enabled: true,
-      hash_salt_configured: true,
-      last_event_ts: new Date("2025-09-01T10:00:00.000Z"),
-      total_events_for_user: 42,
-    });
+    const body = extractPre(result.response);
+    expect(body).toContain("ML Review Events");
+    expect(body).toContain("Scope: user 9001");
+    expect(body).toContain("Limit: 2");
+    expect(body).toContain("Total events in scope: 11");
+    expect(body).toContain("Most recent 2 events:");
+    expect(body).toContain("- 2025-09-01 10:00 UTC");
+    expect(body).toContain("card card-1");
+    expect(body).toContain("user 9001");
+    expect(body).toContain("latency 1200ms");
+    expect(body).toContain("session practice_9001_1758062745383");
+
+    expect(info).toHaveBeenCalledWith(
+      "check_ml_log_summary",
+      expect.objectContaining({
+        env_enabled: true,
+        hash_salt_configured: true,
+        limit: 2,
+        total_events: 11,
+        returned_events: 2,
+        requested_user: "9001",
+        last_event_ts: new Date("2025-09-01T10:00:00Z"),
+      }),
+    );
+    const logArgs = info.mock.calls[0][1] as Record<string, any>;
+    expect(logArgs.filters).toEqual(
+      expect.objectContaining({
+        user_hash: expect.any(String),
+      }),
+    );
   });
 
-  it("omits totalEventsForUser when no user parameter is provided", async () => {
+  it("handles empty result sets", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
     vi.mocked(shouldLogML).mockReturnValue(false);
     vi.mocked(isMlHashSaltConfigured).mockReturnValue(false);
-    vi.mocked(fetchLatestEvent).mockResolvedValue(null);
+    vi.mocked(fetchRecentReviewEvents).mockResolvedValue([]);
+    vi.mocked(countEvents).mockResolvedValue(0);
 
     const info = vi.fn();
     const logger = { info, warn: vi.fn(), error: vi.fn() };
@@ -113,43 +144,34 @@ describe("/check_ml_log command", () => {
       getLogger: () => logger,
     });
 
-    const payload = extractJson(result.response);
-    expect(payload).toEqual({
-      envEnabled: false,
-      hashSaltConfigured: false,
-      lastEventTs: null,
-    });
+    const body = extractPre(result.response);
+    expect(body).toContain("Scope: all users");
+    expect(body).toContain("Limit: 5");
+    expect(body).toContain("Total events in scope: 0");
+    expect(body).toContain("Logging enabled: no");
+    expect(body).toContain("Hash salt configured: no");
+    expect(body).toContain("No events found for this scope.");
 
-    expect(info).toHaveBeenCalledWith("check_ml_log_summary", {
-      env_enabled: false,
-      hash_salt_configured: false,
-      last_event_ts: null,
-    });
-  });
-
-  it("omits totalEventsForUser when no user parameter is provided", async () => {
-    vi.mocked(isAdmin).mockResolvedValue(true);
-    vi.mocked(shouldLogML).mockReturnValue(false);
-    vi.mocked(isMlHashSaltConfigured).mockReturnValue(false);
-    vi.mocked(fetchLatestEvent).mockResolvedValue(null);
-
-    const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
-      getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
-    });
-
-    const payload = extractJson(result.response);
-    expect(payload).toEqual({
-      envEnabled: false,
-      hashSaltConfigured: false,
-      lastEventTs: null,
-    });
+    expect(info).toHaveBeenCalledWith(
+      "check_ml_log_summary",
+      expect.objectContaining({
+        env_enabled: false,
+        hash_salt_configured: false,
+        limit: 5,
+        total_events: 0,
+        returned_events: 0,
+        last_event_ts: null,
+      }),
+    );
   });
 
   it("handles downstream errors", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
     vi.mocked(shouldLogML).mockReturnValue(false);
     vi.mocked(isMlHashSaltConfigured).mockReturnValue(false);
-    vi.mocked(fetchLatestEvent).mockRejectedValue(new Error("db down"));
+    vi.mocked(fetchRecentReviewEvents).mockRejectedValue(
+      new Error("db down"),
+    );
 
     const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
       getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),

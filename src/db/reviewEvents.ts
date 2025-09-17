@@ -2,6 +2,41 @@ import type { PoolClient } from "pg";
 import { getPool } from "./client.js";
 import type { Ml24hTotals, ReviewEvent } from "../types/ml.js";
 
+export interface ReviewEventQueryFilters {
+  userHash?: string;
+  mode?: string;
+  action?: string;
+  client?: string;
+}
+
+function buildReviewEventQuery(filters: ReviewEventQueryFilters = {}) {
+  const clauses: string[] = [];
+  const values: unknown[] = [];
+
+  if (filters.userHash) {
+    clauses.push("user_hash = $" + (values.length + 1));
+    values.push(filters.userHash);
+  }
+
+  if (filters.mode) {
+    clauses.push("mode = $" + (values.length + 1));
+    values.push(filters.mode);
+  }
+
+  if (filters.action) {
+    clauses.push("action = $" + (values.length + 1));
+    values.push(filters.action);
+  }
+
+  if (filters.client) {
+    clauses.push("client = $" + (values.length + 1));
+    values.push(filters.client);
+  }
+
+  const where = clauses.length > 0 ? " WHERE " + clauses.join(" AND ") : "";
+  return { where, values };
+}
+
 export async function insertReviewEvent(
   event: ReviewEvent,
   client?: PoolClient,
@@ -68,14 +103,20 @@ export async function insertReviewEvent(
   );
 }
 
-
-export async function countEventsForUser(userHash: string): Promise<number> {
+export async function countEvents(
+  filters: ReviewEventQueryFilters = {},
+): Promise<number> {
   const pool = getPool();
+  const { where, values } = buildReviewEventQuery(filters);
   const result = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::BIGINT AS count FROM review_events WHERE user_hash = $1`,
-    [userHash],
+    `SELECT COUNT(*)::BIGINT AS count FROM review_events${where}`,
+    values,
   );
   return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function countEventsForUser(userHash: string): Promise<number> {
+  return countEvents({ userHash });
 }
 
 export interface ReviewEventSample {
@@ -92,14 +133,18 @@ export interface ReviewEventSample {
 
 export async function fetchRecentReviewEvents(
   limit: number,
+  filters: ReviewEventQueryFilters = {},
 ): Promise<ReviewEventSample[]> {
   const pool = getPool();
+  const { where, values } = buildReviewEventQuery(filters);
+  const params = values.concat(limit);
+  const limitPlaceholder = `$${params.length}`;
   const result = await pool.query<ReviewEventSample>(
     `SELECT ts, mode, action, session_id, card_id, grade, is_correct, latency_ms, client
-     FROM review_events
+     FROM review_events${where}
      ORDER BY ts DESC
-     LIMIT $1`,
-    [limit],
+     LIMIT ${limitPlaceholder}`,
+    params,
   );
   return result.rows;
 }
@@ -135,7 +180,6 @@ export async function fetchLatestEvent(): Promise<ReviewEventSample | null> {
   );
   return result.rows[0] ?? null;
 }
-
 
 export interface ReviewEvents7dRow {
   day: string;
