@@ -83,7 +83,7 @@ END $$;
 
 ALTER TABLE review_events
   DROP CONSTRAINT IF EXISTS review_events_client_check,
-  ADD CONSTRAINT review_events_client_check CHECK (client IN ('bot', 'miniapp'));
+  ADD CONSTRAINT review_events_client_check CHECK (client IN ('bot', 'miniapp', 'web', 'telegram'));
 
 DROP TABLE IF EXISTS ml_opt_outs CASCADE;
 

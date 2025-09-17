@@ -72,7 +72,7 @@ export async function insertReviewEvent(
 export async function countEventsForUser(userHash: string): Promise<number> {
   const pool = getPool();
   const result = await pool.query<{ count: string }>(
-    SELECT COUNT(*)::BIGINT AS count FROM review_events WHERE user_hash = ,
+    `SELECT COUNT(*)::BIGINT AS count FROM review_events WHERE user_hash = $1`,
     [userHash],
   );
   return Number(result.rows[0]?.count ?? 0);

@@ -3,12 +3,12 @@ import path from "node:path";
 
 import { requireTelegramWebAppAuth } from "../webappInit.js";
 import { buildToolExecCtx } from "../../mastra/context.js";
-import { getDueSummary } from "../../services/srs/getDueSummary.js";
 import {
   getDueCardsTool,
   startReviewTool,
   submitReviewTool,
 } from "../../mastra/tools/reviewTools.js";
+import { getDueCardsStatsTool } from "../../mastra/tools/statisticsTools.js";
 import { logReviewEvent } from "../../lib/mlLogger.js";
 import { hashUserId } from "../../lib/mlPrivacy.js";
 import type { Sm2Snapshot } from "../../types/ml.js";
@@ -273,13 +273,30 @@ function resolveGrade(quality: unknown): number | undefined {
   return undefined;
 }
 
-async function fetchDueCount(
-  mastra: any,
-  userId: number,
-): Promise<number> {
+const DEFAULT_TIMEZONE = "Europe/Stockholm";
+
+async function fetchDueCount(mastra: any, userId: number): Promise<number> {
   try {
-    const summary = await getDueSummary(userId);
-    return summary.dueToday + summary.overdueCount;
+    const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
+      requestId: userId,
+      spanName: "practice_due_count",
+    });
+    const result = await getDueCardsStatsTool.execute({
+      context: { owner_id: userId, timezone: DEFAULT_TIMEZONE },
+      runtimeContext,
+      tracingContext,
+      mastra,
+    });
+
+    if (result.success) {
+      const rawDue = Number(result.stats?.due_cards ?? 0);
+      return Number.isFinite(rawDue) ? rawDue : 0;
+    }
+
+    mastra?.getLogger?.()?.warn("practice_due_count_failed", {
+      user_id: userId,
+      message: result.message,
+    });
   } catch (error) {
     mastra?.getLogger?.()?.warn("practice_due_count_failed", {
       user_id: userId,
