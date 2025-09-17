@@ -47,7 +47,7 @@ export default async function handleCheckMlLogCommand(
     const latest = await fetchLatestEvent();
     const userParam = parseUserId(rawParams);
 
-    let totalEventsForUser = 0;
+    let totalEventsForUser: number | undefined;
     if (userParam) {
       try {
         const hash = hashUserId(userParam);
@@ -60,19 +60,23 @@ export default async function handleCheckMlLogCommand(
       }
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       envEnabled: shouldLogML(),
       hashSaltConfigured: isMlHashSaltConfigured(),
       lastEventTs: latest?.ts ?? null,
-      totalEventsForUser,
     };
+
+    if (typeof totalEventsForUser === "number") {
+      payload.totalEventsForUser = totalEventsForUser;
+    }
 
     const jsonBody = escapeHtml(JSON.stringify(payload, null, 2));
 
     logger?.info?.("check_ml_log_summary", {
       env_enabled: payload.envEnabled,
       last_event_ts: payload.lastEventTs,
-      total_events_for_user: totalEventsForUser,
+      total_events_for_user:
+        typeof totalEventsForUser === "number" ? totalEventsForUser : null,
     });
 
     return {

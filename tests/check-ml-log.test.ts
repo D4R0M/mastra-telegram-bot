@@ -91,6 +91,24 @@ describe("/check_ml_log command", () => {
     expect(payload.lastEventTs).toBe("2025-09-01T10:00:00.000Z");
   });
 
+  it("omits totalEventsForUser when no user parameter is provided", async () => {
+    vi.mocked(isAdmin).mockResolvedValue(true);
+    vi.mocked(shouldLogML).mockReturnValue(false);
+    vi.mocked(isMlHashSaltConfigured).mockReturnValue(false);
+    vi.mocked(fetchLatestEvent).mockResolvedValue(null);
+
+    const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
+      getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+    });
+
+    const payload = extractJson(result.response);
+    expect(payload).toEqual({
+      envEnabled: false,
+      hashSaltConfigured: false,
+      lastEventTs: null,
+    });
+  });
+
   it("handles downstream errors", async () => {
     vi.mocked(isAdmin).mockResolvedValue(true);
     vi.mocked(shouldLogML).mockReturnValue(false);
