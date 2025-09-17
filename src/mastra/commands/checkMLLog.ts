@@ -74,6 +74,7 @@ export default async function handleCheckMlLogCommand(
 
     const logPayload: Record<string, unknown> = {
       env_enabled: payload.envEnabled,
+      hash_salt_configured: payload.hashSaltConfigured,
       last_event_ts: payload.lastEventTs,
     };
 
