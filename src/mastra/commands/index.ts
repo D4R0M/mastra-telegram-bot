@@ -40,6 +40,9 @@ import promote from "./promote.js";
 import demote from "./demote.js";
 import checkMlLog from "./checkMLLog.js";
 import checkReviews from "./checkReviews.js";
+import privacy from "./privacy.js";
+import optOutMl from "./optoutMl.js";
+import optInMl from "./optinMl.js";
 
 export const commandRegistry: Record<string, CommandHandler> = {
   "/add": add,
@@ -84,6 +87,9 @@ export const commandRegistry: Record<string, CommandHandler> = {
   "/promote": promote,
   "/demote": demote,
   "/adminhelp": adminHelp,
+  "/privacy": privacy,
+  "/optout_ml": optOutMl,
+  "/optin_ml": optInMl,
   "/check_ml_log": checkMlLog,
   "/check_reviews": checkReviews,
 };

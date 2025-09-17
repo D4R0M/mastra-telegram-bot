@@ -1,4 +1,10 @@
-import type { NextCardResponse, SubmitPayload, SubmitResponse } from "./types";
+import type {
+  HintPayload,
+  MlPrivacyStatus,
+  NextCardResponse,
+  SubmitPayload,
+  SubmitResponse,
+} from "./types";
 import { getInitData } from "./telegram";
 
 const API_BASE =
@@ -69,3 +75,61 @@ export async function submitReview(
 
   return handleResponse<SubmitResponse>(response);
 }
+
+export async function sendPracticeHint(payload: HintPayload): Promise<void> {
+  const initData = getInitData();
+  if (!initData) {
+    throw new Error("Missing Telegram init data");
+  }
+
+  const response = await fetch(buildUrl("/api/practice/hint"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || "Hint failed");
+  }
+}
+
+export async function fetchMlPrivacyStatus(): Promise<MlPrivacyStatus> {
+  const initData = getInitData();
+  if (!initData) {
+    throw new Error("Missing Telegram init data");
+  }
+
+  const response = await fetch(buildUrl("/api/ml/privacy"), {
+    method: "GET",
+    headers: {
+      "X-Telegram-Init-Data": initData,
+    },
+  });
+
+  return handleResponse<MlPrivacyStatus>(response);
+}
+
+export async function updateMlPrivacyStatus(
+  optedOut: boolean,
+): Promise<MlPrivacyStatus> {
+  const initData = getInitData();
+  if (!initData) {
+    throw new Error("Missing Telegram init data");
+  }
+
+  const response = await fetch(buildUrl("/api/ml/privacy"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData,
+    },
+    body: JSON.stringify({ optedOut }),
+  });
+
+  return handleResponse<MlPrivacyStatus>(response);
+}
+

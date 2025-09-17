@@ -6,6 +6,7 @@ import type {
 import { buildToolExecCtx } from "../context.js";
 import { getDueCardsTool, startReviewTool } from "../tools/reviewTools.js";
 import { getUserSettingsTool } from "../tools/settingsTools.js";
+import { logReviewEvent } from "../../lib/mlLogger.js";
 
 const WEBAPP_ENABLED = process.env.WEBAPP_PRACTICE_ENABLED === "true";
 const PUBLIC_WEBAPP_URL = process.env.PUBLIC_WEBAPP_URL;
@@ -155,6 +156,7 @@ async function startInlinePractice(
         owner_id: userId,
         card_id: cardId,
         session_id: sessionId,
+        position_in_session: 1,
       },
       runtimeContext: startRuntimeContext,
       tracingContext: startTracingContext,
@@ -169,10 +171,37 @@ async function startInlinePractice(
       const currentIndex = 1;
       const totalCards = dueResult.cards.length;
       const filterLine = filter
-        ? `\n🎯 Filter: ${PRACTICE_FILTER_LABELS[filter]}`
+        ? `
+Filter: ${PRACTICE_FILTER_LABELS[filter]}`
         : "";
+      const mlSource = filter
+        ? `practice_filter:${filter}`
+        : "practice_inline";
+
+      await logReviewEvent({
+        mode: "telegram_inline",
+        action: "presented",
+        session_id: sessionId,
+        attempt: 0,
+        hint_count: 0,
+        latency_ms: 0,
+        userId,
+        card_id: card.id,
+        sm2_before: startResult.sm2 ?? null,
+        client: "telegram",
+        source: mlSource,
+        logger,
+      });
+
       return {
-        response: `📚 <b>Review Session Started!</b>\nCards in session: ${totalCards}${filterLine}\n\n<b>Card ${currentIndex}/${totalCards}</b>\n\n❓ <b>${card.front}</b>\n\n<i>Try to recall the answer, then type your response or type "show" to reveal.</i>`,
+        response: `<b>Review Session Started!</b>
+Cards in session: ${totalCards}${filterLine}
+
+<b>Card ${currentIndex}/${totalCards}</b>
+
+<b>${card.front}</b>
+
+<i>Try to recall the answer, then type your response or type "show" to reveal.</i>`,
         conversationState: {
           mode: "review_session",
           step: 1,
@@ -185,6 +214,12 @@ async function startInlinePractice(
             start_time: startResult.start_time,
             correct_streak: 0,
             filter,
+            ml_attempts: 0,
+            ml_hints: 0,
+            ml_answer_text: null,
+            ml_answer_logged: false,
+            ml_sm2_before: startResult.sm2 ?? null,
+            ml_source: mlSource,
           },
         },
         parse_mode: "HTML",

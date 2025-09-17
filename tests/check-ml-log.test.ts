@@ -1,142 +1,98 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as dbClient from "../src/db/client.ts";
-import * as authorization from "../src/mastra/authorization.ts";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+vi.mock("../src/mastra/authorization.ts", () => ({
+  isAdmin: vi.fn(),
+}));
+
+vi.mock("../src/db/reviewEvents.ts", () => ({
+  fetch24hTotals: vi.fn(),
+  fetchLatestEvent: vi.fn(),
+  fetchOptOutCount: vi.fn(),
+}));
+
+vi.mock("../src/lib/mlPrivacy.ts", () => ({
+  isMlLoggingEnabled: vi.fn(),
+}));
+
+import { isAdmin } from "../src/mastra/authorization.ts";
+import {
+  fetch24hTotals,
+  fetchLatestEvent,
+  fetchOptOutCount,
+} from "../src/db/reviewEvents.ts";
+import { isMlLoggingEnabled } from "../src/lib/mlPrivacy.ts";
 import handleCheckMlLogCommand from "../src/mastra/commands/checkMLLog.ts";
 
-const queryMock = vi.fn();
+function extractJson(response: string): any {
+  const match = response.match(/<pre><code>([\s\S]+)<\/code><\/pre>/);
+  if (!match) {
+    throw new Error(`Response did not contain JSON payload: ${response}`);
+  }
+  const unescaped = match[1]
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+  return JSON.parse(unescaped);
+}
 
 describe("/check_ml_log command", () => {
   beforeEach(() => {
-    queryMock.mockReset();
+    vi.resetAllMocks();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("limits results to the requesting user for non-admins", async () => {
-    vi.spyOn(authorization, "isAdmin").mockResolvedValue(false);
-    vi.spyOn(dbClient, "getPool").mockReturnValue({
-      query: queryMock,
-    } as unknown as ReturnType<typeof dbClient.getPool>);
-
-    queryMock.mockResolvedValueOnce({ rows: [{ total: "2" }] });
-    queryMock.mockResolvedValueOnce({
-      rows: [
-        {
-          card_id: "42",
-          user_id: "123",
-          session_id: "session-1",
-          grade: 5,
-          latency_ms: 800,
-          created_at: new Date("2025-09-15T12:00:00Z"),
-        },
-        {
-          card_id: null,
-          user_id: "123",
-          session_id: null,
-          grade: null,
-          latency_ms: null,
-          created_at: "2025-09-14T09:30:00Z",
-        },
-      ],
-    });
+  it("rejects non-admin users", async () => {
+    vi.mocked(isAdmin).mockResolvedValue(false);
 
     const result = await handleCheckMlLogCommand([], "", "123");
 
-    expect(queryMock).toHaveBeenCalledTimes(2);
-    expect(queryMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        text: expect.stringContaining("WHERE user_id = $1"),
-        values: ["123"],
-      }),
-    );
-    expect(queryMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        text: expect.stringContaining("ORDER BY created_at DESC"),
-        values: ["123", 5],
-      }),
-    );
+    expect(result.response).toBe("Not authorized.");
     expect(result.parse_mode).toBe("HTML");
-    expect(result.response).toContain("<b>📊 ML Review Events</b>");
-    expect(result.response).toContain("Scope: your review events");
-    expect(result.response).toContain("Limit: 5");
-    expect(result.response).toContain("Total events in scope: 2");
-    expect(result.response).toContain("Most recent 2 events");
-    expect(result.response).toContain("card <code>42</code>");
-    expect(result.response).toContain("grade 5");
-    expect(result.response).toContain("latency 800ms");
-    expect(result.response).toContain("session <code>session-1</code>");
-    expect(result.response).toContain("<i>unknown card</i>");
-    expect(result.response).toContain("grade <i>n/a</i>");
-    expect(result.response).not.toContain("user <code>123</code>");
+    expect(fetch24hTotals).not.toHaveBeenCalled();
   });
 
-  it("allows admins to filter by user and limit", async () => {
-    vi.spyOn(authorization, "isAdmin").mockResolvedValue(true);
-    vi.spyOn(dbClient, "getPool").mockReturnValue({
-      query: queryMock,
-    } as unknown as ReturnType<typeof dbClient.getPool>);
+  it("returns aggregated JSON when admin", async () => {
+    vi.mocked(isAdmin).mockResolvedValue(true);
+    vi.mocked(isMlLoggingEnabled).mockReturnValue(true);
+    vi.mocked(fetch24hTotals).mockResolvedValue([
+      { mode: "telegram_inline", events: 5, graded: 3, accuracy: 0.6 },
+      { mode: "webapp_practice", events: 7, graded: 5, accuracy: 0.7 },
+    ]);
+    vi.mocked(fetchLatestEvent).mockResolvedValue({
+      ts: new Date("2025-09-01T10:00:00Z"),
+      mode: "webapp_practice",
+      action: "graded",
+      session_id: "session-1",
+      card_id: "card-1",
+      grade: 4,
+      is_correct: true,
+      latency_ms: 1200,
+      client: "web",
+    });
+    vi.mocked(fetchOptOutCount).mockResolvedValue(2);
 
-    queryMock.mockResolvedValueOnce({ rows: [{ total: "3" }] });
-    queryMock.mockResolvedValueOnce({
-      rows: [
-        {
-          card_id: "a1",
-          user_id: "777",
-          session_id: "sess-7",
-          grade: 4,
-          latency_ms: 600,
-          created_at: new Date("2025-08-01T10:00:00Z"),
-        },
-        {
-          card_id: "a2",
-          user_id: "777",
-          session_id: null,
-          grade: 3,
-          latency_ms: null,
-          created_at: "2025-07-31T08:15:00Z",
-        },
-      ],
+    const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
+      getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
     });
 
-    const result = await handleCheckMlLogCommand([], "user:777 limit:3", "9001");
-
-    expect(queryMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        text: expect.stringContaining("WHERE user_id = $1"),
-        values: ["777"],
-      }),
-    );
-    expect(queryMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        values: ["777", 3],
-      }),
-    );
-    expect(result.response).toContain("Scope: user <code>777</code>");
-    expect(result.response).toContain("Limit: 3");
-    expect(result.response).toContain("Total events in scope: 3");
-    expect(result.response).toContain("Most recent 2 events");
-    expect(result.response).toContain("user <code>777</code>");
+    expect(result.parse_mode).toBe("HTML");
+    const payload = extractJson(result.response);
+    expect(payload).toMatchObject({
+      logging_enabled: true,
+      opted_out_users: 2,
+    });
+    expect(payload.totals_24h).toHaveLength(2);
+    expect(payload.latest_event.mode).toBe("webapp_practice");
   });
 
-  it("handles empty event logs gracefully", async () => {
-    vi.spyOn(authorization, "isAdmin").mockResolvedValue(true);
-    vi.spyOn(dbClient, "getPool").mockReturnValue({
-      query: queryMock,
-    } as unknown as ReturnType<typeof dbClient.getPool>);
+  it("handles downstream errors", async () => {
+    vi.mocked(isAdmin).mockResolvedValue(true);
+    vi.mocked(isMlLoggingEnabled).mockReturnValue(false);
+    vi.mocked(fetch24hTotals).mockRejectedValue(new Error("db down"));
 
-    queryMock.mockResolvedValueOnce({ rows: [{ total: "0" }] });
-    queryMock.mockResolvedValueOnce({ rows: [] });
+    const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
+      getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+    });
 
-    const result = await handleCheckMlLogCommand([], "limit:2", "123");
-
-    expect(result.response).toContain("Total events in scope: 0");
-    expect(result.response).toContain("Limit: 2");
-    expect(result.response).toContain("• No review events recorded yet.");
+    expect(result.response).toBe("Failed to fetch ML log summary.");
   });
 });

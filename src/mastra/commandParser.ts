@@ -6,7 +6,7 @@ import type {
 } from "./commandTypes.js";
 import { buildToolExecCtx } from "./context.js";
 import { addCardTool, editCardTool } from "./tools/vocabularyTools.js";
-import { submitReviewTool } from "./tools/reviewTools.js";
+import { startReviewTool, submitReviewTool } from "./tools/reviewTools.js";
 import { importCSVTool, previewCSVTool } from "./tools/importExportTools.js";
 import { commandRegistry } from "./commands/index.js";
 import { isAdmin } from "./authorization.js";
@@ -19,6 +19,7 @@ import {
 import { updateReminderSettingsTool } from "./tools/reminderTools.js";
 import { parseReminderTimesInput } from "./utils/reminderTime.js";
 import { clearConversationState } from "./conversationStateStorage.js";
+import { logReviewEvent } from "../lib/mlLogger.js";
 
 export type { CommandResponse, ConversationState, CommandContext } from "./commandTypes.js";
 
@@ -320,6 +321,30 @@ async function handleReviewSessionFlow(
       ) {
         // Show the answer with inline keyboard buttons
         const card = state.data.current_card;
+        const sessionIdForLogging =
+          typeof state.data.session_id === "string"
+            ? state.data.session_id
+            : `session_${userId}`;
+        const now = Date.now();
+        state.data.ml_hints = (state.data.ml_hints ?? 0) + 1;
+        const hintCount = state.data.ml_hints ?? 0;
+        const hintLatency = now - (state.data.start_time ?? now);
+
+        await logReviewEvent({
+          mode: "telegram_inline",
+          action: "hint_shown",
+          session_id: sessionIdForLogging,
+          attempt: state.data.ml_attempts ?? 0,
+          hint_count: hintCount,
+          latency_ms: hintLatency,
+          userId,
+          card_id: card.card_id || card.id,
+          sm2_before: state.data.ml_sm2_before ?? null,
+          client: "telegram",
+          source: state.data.ml_source ?? "practice_inline",
+          logger,
+        });
+
         const progressLine = `Card ${state.data.current_index}/${state.data.total_cards}`;
         const inline_keyboard = {
           inline_keyboard: [
@@ -370,7 +395,42 @@ async function handleReviewSessionFlow(
       } else {
         // User attempted an answer, show the correct answer
         const card = state.data.current_card;
+        const sessionIdForLogging =
+          typeof state.data.session_id === "string"
+            ? state.data.session_id
+            : `session_${userId}`;
         const userAnswer = message.trim();
+        state.data.ml_attempts = (state.data.ml_attempts ?? 0) + 1;
+        const attemptCount = state.data.ml_attempts ?? 0;
+        const hintCount = state.data.ml_hints ?? 0;
+        const answerLatency = Date.now() - (state.data.start_time ?? Date.now());
+        state.data.ml_answer_text = userAnswer;
+
+        if (!state.data.ml_answer_logged) {
+          const normalizedUserForLog = normalizeText(userAnswer);
+          const normalizedBackForLog = normalizeText(card.back || "");
+          const isExactForLog = normalizedUserForLog === normalizedBackForLog;
+          const levForLog = levenshtein(normalizedUserForLog, normalizedBackForLog);
+          const overlapForLog = tokenOverlap(normalizedUserForLog, normalizedBackForLog);
+          await logReviewEvent({
+            mode: "telegram_inline",
+            action: "answered",
+            session_id: sessionIdForLogging,
+            attempt: attemptCount,
+            hint_count: hintCount,
+            latency_ms: answerLatency,
+            userId,
+            card_id: card.card_id || card.id,
+            answer_text: userAnswer,
+            is_correct: isExactForLog ? true : overlapForLog >= 0.5 ? null : false,
+            sm2_before: state.data.ml_sm2_before ?? null,
+            client: "telegram",
+            source: state.data.ml_source ?? "practice_inline",
+            logger,
+          });
+          state.data.ml_answer_logged = true;
+        }
+
         const cardBack = card.back || "";
         const normalizedUser = normalizeText(userAnswer);
         const normalizedBack = normalizeText(cardBack);
@@ -449,6 +509,11 @@ async function handleReviewSessionFlow(
       }
 
       // Submit the review
+      const sessionIdForLogging = state.data.session_id ?? `session_${userId}`;
+      const mlSource = state.data.ml_source ?? "practice_inline";
+      const hintCount = state.data.ml_hints ?? 0;
+      const attemptForSubmit = Math.max(state.data.ml_attempts ?? 0, 1);
+
       try {
         const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
           requestId: userId,
@@ -459,9 +524,16 @@ async function handleReviewSessionFlow(
             card_id:
               state.data.current_card.card_id || state.data.current_card.id,
             start_time: state.data.start_time || Date.now() - 10000,
-            grade: grade,
+            grade,
             session_id: state.data.session_id,
             position_in_session: state.data.current_index,
+            mode: "telegram_inline",
+            client: "telegram",
+            source: mlSource,
+            attempt: attemptForSubmit,
+            hint_count: hintCount,
+            answer_text: state.data.ml_answer_text ?? undefined,
+            log_answer_event: false,
           },
           runtimeContext,
           tracingContext,
@@ -484,28 +556,97 @@ async function handleReviewSessionFlow(
             state.data.all_cards && nextIndex <= state.data.all_cards.length;
 
           if (hasMoreCards) {
-            const nextCard = state.data.all_cards[nextIndex - 1];
+            const nextCardRef = state.data.all_cards[nextIndex - 1];
+            const nextCardId =
+              nextCardRef.card_id || nextCardRef.id;
+            let nextCardDetails: any = nextCardRef;
+            let nextStartTime = Date.now();
+            let nextSm2 = null;
+
+            try {
+              const {
+                runtimeContext: nextRuntimeContext,
+                tracingContext: nextTracingContext,
+              } = buildToolExecCtx(mastra, { requestId: userId });
+              const startNext = await startReviewTool.execute({
+                context: {
+                  owner_id: userId,
+                  card_id: nextCardId,
+                  session_id: state.data.session_id,
+                  position_in_session: nextIndex,
+                },
+                runtimeContext: nextRuntimeContext,
+                tracingContext: nextTracingContext,
+                mastra,
+              });
+
+              if (startNext.success && startNext.card) {
+                nextCardDetails = {
+                  ...startNext.card,
+                  back: startNext.card.back ?? nextCardRef.back,
+                };
+                nextStartTime = startNext.start_time;
+                nextSm2 = startNext.sm2 ?? null;
+
+                await logReviewEvent({
+                  mode: "telegram_inline",
+                  action: "presented",
+                  session_id: sessionIdForLogging,
+                  attempt: 0,
+                  hint_count: 0,
+                  latency_ms: 0,
+                  userId,
+                  card_id: nextCardDetails.id ?? nextCardId,
+                  sm2_before: nextSm2,
+                  client: "telegram",
+                  source: mlSource,
+                  logger,
+                });
+              }
+            } catch (error) {
+              logger?.warn?.("inline_present_next_failed", {
+                error: error instanceof Error ? error.message : String(error),
+              });
+              nextCardDetails = {
+                ...nextCardRef,
+                id: nextCardRef.card_id || nextCardRef.id,
+              };
+            }
+
             const progressLine = `Card ${nextIndex}/${state.data.total_cards}`;
             const streakLine =
-              newStreak > 0 ? ` | ✅ Correct streak: ${newStreak}` : "";
+              newStreak > 0 ? ` | Correct streak: ${newStreak}` : "";
             const motivationLine =
-              newStreak >= 3 ? "\n🔥 You’re on a roll!" : "";
+              newStreak >= 3 ? "\nKeep it up!" : "";
+
             return {
-              response: `${grade >= 3 ? "✅" : "📝"} Recorded: Grade ${grade}\n\n${progressLine}${streakLine}${motivationLine}\n\n❓ <b>${nextCard.front}</b>\n\n<i>Try to recall the answer, then type your response or type \"show\" to reveal.</i>`,
+              response: `Recorded: Grade ${grade} (${grade >= 3 ? "correct" : "incorrect"})
+
+${progressLine}${streakLine}${motivationLine}
+
+<b>${nextCardDetails.front}</b>
+
+<i>Try to recall the answer, then type your response or type "show" to reveal.</i>`,
               conversationState: {
                 mode: "review_session",
                 step: 1,
                 data: {
                   session_id: state.data.session_id,
-                  current_card: nextCard,
+                  current_card: nextCardDetails,
                   current_index: nextIndex,
                   total_cards: state.data.total_cards,
                   all_cards: state.data.all_cards,
-                  start_time: Date.now(),
+                  start_time: nextStartTime,
                   correct_count: updatedCorrect,
                   incorrect_count: updatedIncorrect,
                   session_start: state.data.session_start,
                   correct_streak: newStreak,
+                  ml_attempts: 0,
+                  ml_hints: 0,
+                  ml_answer_text: null,
+                  ml_answer_logged: false,
+                  ml_sm2_before: nextSm2,
+                  ml_source: mlSource,
                 },
               },
               parse_mode: "HTML",

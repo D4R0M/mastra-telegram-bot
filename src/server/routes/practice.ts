@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
@@ -10,6 +9,15 @@ import {
   submitReviewTool,
 } from "../../mastra/tools/reviewTools.js";
 import { getDueCardsStatsTool } from "../../mastra/tools/statisticsTools.js";
+import { logReviewEvent } from "../../lib/mlLogger.js";
+import {
+  clearUserOptOut,
+  hashUserId,
+  isMlLoggingEnabled,
+  isUserOptedOut,
+  setUserOptOut,
+} from "../../lib/mlPrivacy.js";
+import type { Sm2Snapshot } from "../../types/ml.js";
 
 type Handler = (c: any) => Promise<any>;
 
@@ -60,6 +68,59 @@ function cacheControlForExt(ext: string): string {
     return "no-store";
   }
   return "public, max-age=31536000, immutable";
+}
+
+
+function toNonNegativeInt(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  const int = Math.max(0, Math.floor(parsed));
+  return Number.isFinite(int) ? int : null;
+}
+
+function parseSm2SnapshotPayload(raw: unknown): Sm2Snapshot | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const data = raw as Record<string, unknown>;
+  const interval = Number(data.interval);
+  const ease = Number(data.ease);
+  const reps = Number(data.reps);
+  if (!Number.isFinite(interval) || !Number.isFinite(ease) || !Number.isFinite(reps)) {
+    return null;
+  }
+  const snapshot: Sm2Snapshot = {
+    interval: Math.max(0, Math.round(interval)),
+    ease,
+    reps: Math.max(0, Math.round(reps)),
+    due_at: typeof data.due_at === "string" ? data.due_at : null,
+  };
+  return snapshot;
+}
+
+function resolvePracticeSource(c: any, explicit?: unknown): string | undefined {
+  if (typeof explicit === "string" && explicit.trim().length > 0) {
+    return explicit;
+  }
+  let querySource: string | undefined;
+  try {
+    querySource = typeof c.req?.query === "function" ? c.req.query("source") : undefined;
+  } catch {
+    querySource = undefined;
+  }
+  if (querySource && querySource.trim().length > 0) {
+    return querySource;
+  }
+  try {
+    const url = new URL(c.req.url);
+    const sessionParam = url.searchParams.get("session");
+    if (sessionParam && sessionParam.trim().length > 0) {
+      return sessionParam;
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
 }
 
 export function createPracticeWebAppHandler(
@@ -168,15 +229,6 @@ function takeRateLimitToken(key: string): boolean {
   return true;
 }
 
-function computeUserHash(botId: string | undefined, userId: number) {
-  const prefix = botId && botId.length > 0 ? botId : "bot";
-  return createHash("sha256")
-    .update(`${prefix}:${userId}`)
-    .digest("hex");
-}
-
-const botId = process.env.TELEGRAM_BOT_TOKEN?.split(":")[0];
-
 const QUALITY_TO_GRADE: Record<string, number> = {
   again: 0,
   forgot: 0,
@@ -261,7 +313,7 @@ export function createPracticeNextHandler(mastra: any): Handler {
     const requestId = `${userId}`;
     const sessionId =
       c.req.query("sessionId") || `practice_${userId}_${Date.now()}`;
-
+    const sourceKey = resolvePracticeSource(c);
     try {
       const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
         requestId,
@@ -281,6 +333,7 @@ export function createPracticeNextHandler(mastra: any): Handler {
           {
             done: true,
             dueCount,
+            source: sourceKey,
             sessionId,
             serverTime: Date.now(),
           },
@@ -316,11 +369,29 @@ export function createPracticeNextHandler(mastra: any): Handler {
         );
       }
 
+      const sm2Before = startResult.sm2 ?? null;
+
+      await logReviewEvent({
+        mode: "webapp_practice",
+        action: "presented",
+        session_id: sessionId,
+        attempt: 0,
+        hint_count: 0,
+        latency_ms: 0,
+        userId,
+        card_id: startResult.card.id,
+        sm2_before: sm2Before,
+        client: "web",
+        source: sourceKey,
+        logger,
+      });
+
       const dueCount = await fetchDueCount(mastra, userId);
 
       return c.json(
         {
           sessionId,
+          source: sourceKey,
           card: {
             id: startResult.card.id,
             front: startResult.card.front,
@@ -335,6 +406,7 @@ export function createPracticeNextHandler(mastra: any): Handler {
             lapses: startResult.card.lapses,
           },
           startTime: startResult.start_time,
+          sm2Before,
           dueCount,
           serverTime: Date.now(),
           user: {
@@ -373,6 +445,14 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
       const elapsedMs = Number(payload?.elapsedMs ?? 0);
       const clientTs = Number(payload?.clientTs ?? 0);
       const sessionId = payload?.sessionId as string | undefined;
+        const attemptValue = toNonNegativeInt(payload?.attempt);
+        const hintCountValue = toNonNegativeInt(payload?.hintCount);
+        const answerText = typeof payload?.answerText === "string"
+          ? payload.answerText
+          : undefined;
+        const sm2BeforePayload = parseSm2SnapshotPayload(payload?.sm2Before);
+        const sourceKey = resolvePracticeSource(c, payload?.source);
+        const answeredAlready = payload?.answeredLogged === true;
 
       if (!cardId || typeof cardId !== "string") {
         return c.json({ error: "cardId required" }, 400);
@@ -385,24 +465,50 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
 
       const safeElapsed = Number.isFinite(elapsedMs) ? elapsedMs : 0;
       const startTime = Math.max(receivedAt - Math.max(safeElapsed, 0), 0);
+        const sessionIdentifier = sessionId ?? `practice_${userId}`;
 
       const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
         requestId: userKey,
         spanName: "practice_submit",
       });
 
-      const submitResult = await submitReviewTool.execute({
-        context: {
-          owner_id: userId,
-          card_id: cardId,
-          grade,
-          start_time: startTime,
-          session_id: sessionId,
-        },
-        runtimeContext,
-        tracingContext,
-        mastra,
-      });
+        if (!answeredAlready) {
+          await logReviewEvent({
+            mode: "webapp_practice",
+            action: "answered",
+            session_id: sessionIdentifier,
+            attempt: attemptValue ?? null,
+            hint_count: hintCountValue ?? null,
+            latency_ms: safeElapsed,
+            userId,
+            card_id: cardId,
+            answer_text: answerText ?? null,
+            sm2_before: sm2BeforePayload,
+            client: "web",
+            source: sourceKey,
+            logger,
+          });
+        }
+
+        const submitResult = await submitReviewTool.execute({
+          context: {
+            owner_id: userId,
+            card_id: cardId,
+            grade,
+            start_time: startTime,
+            session_id: sessionIdentifier,
+            mode: "webapp_practice",
+            client: "web",
+            source: sourceKey ?? undefined,
+            attempt: attemptValue ?? undefined,
+            hint_count: hintCountValue ?? undefined,
+            answer_text: answerText,
+            log_answer_event: false,
+          },
+          runtimeContext,
+          tracingContext,
+          mastra,
+        });
 
       if (!submitResult.success) {
         logger?.warn("practice_submit_failed", {
@@ -419,11 +525,16 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
         ? clientTs - receivedAt
         : undefined;
 
-      const hash = computeUserHash(botId, userId);
+      let hashedUser: string | undefined;
+      try {
+        hashedUser = hashUserId(userId);
+      } catch {
+        hashedUser = undefined;
+      }
       logger?.info("practice_submit_recorded", {
-        user_hash: hash,
+        user_hash: hashedUser ?? null,
         card_id: cardId,
-        session_id: sessionId,
+        session_id: sessionIdentifier,
         grade,
         latency_ms: latency,
         clock_skew_ms: clockSkew,
@@ -434,6 +545,7 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
         prev_repetitions: submitResult.review_result?.previous_repetitions,
         new_repetitions: submitResult.review_result?.new_repetitions,
         remaining_due: remainingDue,
+        source: sourceKey ?? null,
       });
 
       return c.json(
@@ -452,6 +564,94 @@ export function createPracticeSubmitHandler(mastra: any): Handler {
     }
   });
 }
+
+export function createPracticeHintHandler(mastra: any): Handler {
+  return requireTelegramWebAppAuth(async (c, auth) => {
+    const logger = mastra?.getLogger?.();
+    try {
+      const payload = await c.req.json();
+      const cardId = typeof payload?.cardId === "string" ? payload.cardId : undefined;
+      const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId : undefined;
+      if (!cardId || !sessionId) {
+        return c.json({ error: "cardId and sessionId required" }, 400);
+      }
+
+      const attemptValue = toNonNegativeInt(payload?.attempt);
+      const hintCountValue = toNonNegativeInt(payload?.hintCount);
+      const elapsedRaw = Number(payload?.elapsedMs);
+      const latencyMs = Number.isFinite(elapsedRaw)
+        ? Math.max(0, Math.floor(elapsedRaw))
+        : null;
+      const sm2Before = parseSm2SnapshotPayload(payload?.sm2Before);
+      const sourceKey = resolvePracticeSource(c, payload?.source);
+
+      await logReviewEvent({
+        mode: "webapp_practice",
+        action: "hint_shown",
+        session_id: sessionId,
+        attempt: attemptValue ?? null,
+        hint_count: hintCountValue ?? null,
+        latency_ms: latencyMs,
+        userId: auth.tgUser.id,
+        card_id: cardId,
+        sm2_before: sm2Before,
+        client: "web",
+        source: sourceKey,
+        logger,
+      });
+
+      return c.json({ ok: true }, 200);
+    } catch (error) {
+      logger?.warn("practice_hint_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json({ error: "Hint failed" }, 500);
+    }
+  });
+}
+
+export function createMlPrivacyStatusHandler(): Handler {
+  return requireTelegramWebAppAuth(async (c, auth) => {
+    try {
+      const optedOut = await isUserOptedOut(auth.tgUser.id);
+      const enabled = isMlLoggingEnabled();
+      return c.json({ optedOut, loggingEnabled: enabled }, 200);
+    } catch (error) {
+      const logger = c?.get?.("mastra")?.getLogger?.();
+      logger?.warn("ml_privacy_status_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json({ error: "Unable to fetch privacy status" }, 500);
+    }
+  });
+}
+
+export function createMlPrivacyUpdateHandler(): Handler {
+  return requireTelegramWebAppAuth(async (c, auth) => {
+    const logger = c?.get?.("mastra")?.getLogger?.();
+    try {
+      const payload = await c.req.json();
+      if (typeof payload?.optedOut !== "boolean") {
+        return c.json({ error: "optedOut boolean required" }, 400);
+      }
+
+      if (payload.optedOut) {
+        await setUserOptOut(auth.tgUser.id, payload?.source ?? "webapp_toggle");
+      } else {
+        await clearUserOptOut(auth.tgUser.id);
+      }
+
+      const enabled = isMlLoggingEnabled();
+      return c.json({ optedOut: payload.optedOut, loggingEnabled: enabled }, 200);
+    } catch (error) {
+      logger?.warn?.("ml_privacy_update_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json({ error: "Unable to update privacy preference" }, 500);
+    }
+  });
+}
+
 
 export function __resetPracticeRateLimit() {
   submitBuckets.clear();

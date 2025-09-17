@@ -24,9 +24,12 @@ import { inngest, inngestServe, registerCronWorkflow } from "./inngest";
 import { runMigrations } from "../db/migrate.js";
 import { processTelegramUpdate } from "./telegram.js";
 import {
+  createPracticeHintHandler,
   createPracticeNextHandler,
   createPracticeSubmitHandler,
   createPracticeWebAppHandler,
+  createMlPrivacyStatusHandler,
+  createMlPrivacyUpdateHandler,
 } from "../server/routes/practice.js";
 import {
   addCardTool,
@@ -352,6 +355,22 @@ export const mastra = new Mastra({
               method: "POST",
               createHandler: async ({ mastra }) =>
                 createPracticeSubmitHandler(mastra),
+            },
+            {
+              path: "/api/practice/hint",
+              method: "POST",
+              createHandler: async ({ mastra }) =>
+                createPracticeHintHandler(mastra),
+            },
+            {
+              path: "/api/ml/privacy",
+              method: "GET",
+              createHandler: async () => createMlPrivacyStatusHandler(),
+            },
+            {
+              path: "/api/ml/privacy",
+              method: "POST",
+              createHandler: async () => createMlPrivacyUpdateHandler(),
             },
             {
               path: "/practice",

@@ -1,5 +1,12 @@
 export type ReviewGrade = 0 | 1 | 2 | 3 | 4 | 5;
 
+export interface Sm2Snapshot {
+  interval: number;
+  ease: number;
+  reps: number;
+  due_at?: string | null;
+}
+
 export interface PracticeCard {
   id: string;
   front: string;
@@ -18,6 +25,8 @@ export interface NextCardResponse {
   sessionId: string;
   card?: PracticeCard;
   startTime?: number;
+  sm2Before?: Sm2Snapshot | null;
+  source?: string | null;
   dueCount?: number;
   serverTime?: number;
   done?: boolean;
@@ -52,6 +61,27 @@ export interface SubmitPayload {
   grade: ReviewGrade;
   elapsedMs: number;
   clientTs: number;
+  attempt?: number;
+  hintCount?: number;
+  answerText?: string | null;
+  sm2Before?: Sm2Snapshot | null;
+  source?: string | null;
+  answeredLogged?: boolean;
+}
+
+export interface HintPayload {
+  sessionId: string;
+  cardId: string;
+  attempt?: number;
+  hintCount?: number;
+  elapsedMs?: number;
+  sm2Before?: Sm2Snapshot | null;
+  source?: string | null;
+}
+
+export interface MlPrivacyStatus {
+  optedOut: boolean;
+  loggingEnabled: boolean;
 }
 
 export interface TelegramThemeParams {

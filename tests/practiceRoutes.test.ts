@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import crypto from "crypto";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -34,6 +34,14 @@ import {
 
 const BOT_TOKEN = "123456:ABCDEF";
 const BOT_ID = BOT_TOKEN.split(":")[0];
+
+beforeEach(() => {
+  process.env.ML_HASH_SALT = "test-salt";
+});
+
+afterEach(() => {
+  delete process.env.ML_HASH_SALT;
+});
 
 function signedInitData(user: { id: number; username?: string; first_name?: string }) {
   const authDate = Math.floor(Date.now() / 1000);
@@ -339,9 +347,10 @@ describe("practice routes", () => {
       expect.objectContaining({
         user_hash: crypto
           .createHash("sha256")
-          .update(`${BOT_ID}:${userId}`)
+          .update(`test-salt:${userId}`)
           .digest("hex"),
         remaining_due: 4,
+        source: null,
       }),
     );
   });
