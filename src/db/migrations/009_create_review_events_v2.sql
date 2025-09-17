@@ -49,4 +49,10 @@ CREATE INDEX IF NOT EXISTS idx_review_events_ts ON review_events (ts);
 CREATE INDEX IF NOT EXISTS idx_review_events_user_ts ON review_events (user_hash, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_review_events_mode_ts ON review_events (mode, ts DESC);
 
+CREATE TABLE IF NOT EXISTS ml_opt_outs (
+  user_hash    TEXT PRIMARY KEY,
+  opted_out_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reason       TEXT
+);
+
 COMMIT;

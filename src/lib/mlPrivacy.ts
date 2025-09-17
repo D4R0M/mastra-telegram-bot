@@ -22,7 +22,7 @@ export function getMlHashSalt(): string {
 export function hashUserId(raw: string | number): string {
   const salt = getMlHashSalt();
   const normalized = normalizeUserId(raw);
-  return createHash("sha256").update(`${normalized}${salt}`).digest("hex");
+  return createHash("sha256").update(`${salt}:${normalized}`).digest("hex");
 }
 
 export function redactAnswerText(answer?: string | null): string | null {

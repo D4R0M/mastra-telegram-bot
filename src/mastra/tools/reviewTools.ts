@@ -354,7 +354,7 @@ export const submitReviewTool = createTool({
       .optional()
       .describe("Source mode for ML logging"),
     client: z
-      .enum(["bot", "miniapp"])
+      .enum(["bot", "miniapp", "telegram", "web"])
       .optional()
       .describe("Client identifier for ML logging"),
     source: z
