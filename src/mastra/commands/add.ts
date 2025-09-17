@@ -3,6 +3,32 @@ import { buildToolExecCtx } from "../context.js";
 import { addCardTool } from "../tools/vocabularyTools.js";
 import { formatCard } from "./utils.js";
 
+type DuplicatePayload = {
+  existing?: { id: string };
+  similar?: Array<{ id: string; front: string }>;
+};
+
+function truncateLabel(value: string, max = 32): string {
+  if (value.length <= max) {
+    return value;
+  }
+  return `${value.slice(0, max - 3)}...`;
+}
+
+function buildDuplicateKeyboard(duplicate: DuplicatePayload) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (duplicate.existing) {
+    rows.push([{ text: "View existing card", callback_data: `list:menu:${duplicate.existing.id}` }]);
+  }
+
+  duplicate.similar?.slice(0, 3).forEach((card) => {
+    rows.push([{ text: `Open: ${truncateLabel(card.front)}`, callback_data: `list:menu:${card.id}` }]);
+  });
+
+  return rows.length ? { inline_keyboard: rows } : undefined;
+}
+
 export default async function handleAddCommand(
   params: string[],
   rawParams: string,
@@ -21,7 +47,7 @@ export default async function handleAddCommand(
       input = rawParams.replace("::", "|");
     }
 
-    logger?.info("🔧 [CommandParser] Quick add detected:", { input });
+    logger?.info("[AddCommand] Quick add detected", { input });
 
     try {
       const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
@@ -30,7 +56,7 @@ export default async function handleAddCommand(
       const result = await addCardTool.execute({
         context: {
           owner_id: userId,
-          input: input,
+          input,
           lang_front: "sv",
           lang_back: "en",
         },
@@ -41,19 +67,28 @@ export default async function handleAddCommand(
 
       if (result.success && result.card) {
         return {
-          response: `✅ Card added successfully!\n\n${formatCard(result.card)}\n\nUse /list to see all your cards.`,
-          parse_mode: "HTML",
-        };
-      } else {
-        return {
-          response: `❌ ${result.message}`,
+          response: `Card added successfully!\n\n${formatCard(result.card)}\n\nUse /list to see all your cards.`,
           parse_mode: "HTML",
         };
       }
-    } catch (error) {
-      logger?.error("❌ [CommandParser] Error adding card:", error);
+
+      if (result.duplicate) {
+        const keyboard = buildDuplicateKeyboard(result.duplicate);
+        const baseResponse = {
+          response: result.message,
+          parse_mode: "HTML" as const,
+        };
+        return keyboard ? { ...baseResponse, inline_keyboard: keyboard } : baseResponse;
+      }
+
       return {
-        response: "❌ Error adding card. Please try again.",
+        response: `Warning: ${result.message}`,
+        parse_mode: "HTML",
+      };
+    } catch (error) {
+      logger?.error("[AddCommand] Error adding card", error);
+      return {
+        response: "Error adding card. Please try again.",
         parse_mode: "HTML",
       };
     }
@@ -63,7 +98,7 @@ export default async function handleAddCommand(
   if (params.length === 0) {
     return {
       response:
-        "📝 <b>Adding a new card</b>\n\nPlease enter the <b>front side</b> of your card (the word or phrase to remember):",
+        "<b>Adding a new card</b>\n\nPlease enter the <b>front side</b> of your card (the word or phrase to remember):",
       conversationState: {
         mode: "add_card_guided",
         step: 1,
@@ -77,7 +112,7 @@ export default async function handleAddCommand(
   // If params provided but not in quick-add format
   return {
     response:
-      "❓ To add a card, use one of these formats:\n\n• <code>/add word | translation</code>\n• <code>/add word :: translation</code>\n• <code>/add</code> (for guided mode)\n\nOptionally add tags and examples:\n<code>/add word | translation | tag1,tag2 | example sentence</code>",
+      "To add a card, use one of these formats:\n\n- <code>/add word | translation</code>\n- <code>/add word :: translation</code>\n- <code>/add</code> (for guided mode)\n\nOptionally add tags and examples:\n<code>/add word | translation | tag1,tag2 | example sentence</code>",
     parse_mode: "HTML",
   };
 }

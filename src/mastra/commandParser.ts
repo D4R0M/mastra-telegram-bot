@@ -23,6 +23,33 @@ import { logReviewEvent } from "../lib/mlLogger.js";
 
 export type { CommandResponse, ConversationState, CommandContext } from "./commandTypes.js";
 
+type DuplicateUiPayload = {
+  existing?: { id: string };
+  similar?: Array<{ id: string; front: string }>;
+};
+
+function truncateDuplicateLabel(value: string, max = 32): string {
+  if (value.length <= max) {
+    return value;
+  }
+  return `${value.slice(0, max - 3)}...`;
+}
+
+function buildDuplicateInlineKeyboard(duplicate: DuplicateUiPayload) {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (duplicate.existing) {
+    rows.push([{ text: "View existing card", callback_data: `list:menu:${duplicate.existing.id}` }]);
+  }
+
+  duplicate.similar?.slice(0, 3).forEach((card) => {
+    rows.push([{ text: `Open: ${truncateDuplicateLabel(card.front)}`, callback_data: `list:menu:${card.id}` }]);
+  });
+
+  return rows.length ? { inline_keyboard: rows } : undefined;
+}
+
+
 export interface ParsedCommand {
   command: string;
   params: string[];
@@ -214,7 +241,6 @@ async function handleAddCardGuidedFlow(
         state.data.example = message.trim();
       }
 
-      // Now create the card
       try {
         const { runtimeContext, tracingContext } = buildToolExecCtx(mastra, {
           requestId: userId,
@@ -236,21 +262,31 @@ async function handleAddCardGuidedFlow(
 
         if (result.success && result.card) {
           return {
-            response: `✅ Card added successfully!\n\n${formatCard(result.card)}\n\nAdd another with /add or start practicing with /practice`,
-            conversationState: undefined,
-            parse_mode: "HTML",
-          };
-        } else {
-          return {
-            response: `❌ ${result.message}`,
+            response: `Card added successfully!\n\n${formatCard(result.card)}\n\nAdd another with /add or start practicing with /practice`,
             conversationState: undefined,
             parse_mode: "HTML",
           };
         }
-      } catch (error) {
-        logger?.error("❌ [CommandParser] Error in guided add:", error);
+
+        if (result.duplicate) {
+          const keyboard = buildDuplicateInlineKeyboard(result.duplicate);
+          const baseResponse = {
+            response: result.message,
+            conversationState: undefined,
+            parse_mode: "HTML" as const,
+          };
+          return keyboard ? { ...baseResponse, inline_keyboard: keyboard } : baseResponse;
+        }
+
         return {
-          response: "❌ Error adding card. Please try again with /add",
+          response: `Warning: ${result.message}`,
+          conversationState: undefined,
+          parse_mode: "HTML",
+        };
+      } catch (error) {
+        logger?.error("[CommandParser] Error in guided add", error);
+        return {
+          response: "Error adding card. Please try again with /add",
           conversationState: undefined,
           parse_mode: "HTML",
         };
