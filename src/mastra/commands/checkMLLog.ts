@@ -72,12 +72,17 @@ export default async function handleCheckMlLogCommand(
 
     const jsonBody = escapeHtml(JSON.stringify(payload, null, 2));
 
-    logger?.info?.("check_ml_log_summary", {
+    const logPayload: Record<string, unknown> = {
       env_enabled: payload.envEnabled,
+      hash_salt_configured: payload.hashSaltConfigured,
       last_event_ts: payload.lastEventTs,
-      total_events_for_user:
-        typeof totalEventsForUser === "number" ? totalEventsForUser : null,
-    });
+    };
+
+    if (typeof totalEventsForUser === "number") {
+      logPayload.total_events_for_user = totalEventsForUser;
+    }
+
+    logger?.info?.("check_ml_log_summary", logPayload);
 
     return {
       response: `<pre><code>${jsonBody}</code></pre>`,

@@ -71,13 +71,16 @@ describe("/check_ml_log command", () => {
     });
     vi.mocked(countEventsForUser).mockResolvedValue(42);
 
+    const info = vi.fn();
+    const logger = { info, warn: vi.fn(), error: vi.fn() };
+
     const result = await handleCheckMlLogCommand(
       [],
       "user:9001",
       "9001",
       undefined,
       {
-        getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+        getLogger: () => logger,
       },
     );
 
@@ -89,6 +92,37 @@ describe("/check_ml_log command", () => {
       totalEventsForUser: 42,
     });
     expect(payload.lastEventTs).toBe("2025-09-01T10:00:00.000Z");
+    expect(info).toHaveBeenCalledWith("check_ml_log_summary", {
+      env_enabled: true,
+      last_event_ts: new Date("2025-09-01T10:00:00.000Z"),
+      total_events_for_user: 42,
+    });
+  });
+
+  it("omits totalEventsForUser when no user parameter is provided", async () => {
+    vi.mocked(isAdmin).mockResolvedValue(true);
+    vi.mocked(shouldLogML).mockReturnValue(false);
+    vi.mocked(isMlHashSaltConfigured).mockReturnValue(false);
+    vi.mocked(fetchLatestEvent).mockResolvedValue(null);
+
+    const info = vi.fn();
+    const logger = { info, warn: vi.fn(), error: vi.fn() };
+
+    const result = await handleCheckMlLogCommand([], "", "9001", undefined, {
+      getLogger: () => logger,
+    });
+
+    const payload = extractJson(result.response);
+    expect(payload).toEqual({
+      envEnabled: false,
+      hashSaltConfigured: false,
+      lastEventTs: null,
+    });
+
+    expect(info).toHaveBeenCalledWith("check_ml_log_summary", {
+      env_enabled: false,
+      last_event_ts: null,
+    });
   });
 
   it("omits totalEventsForUser when no user parameter is provided", async () => {
