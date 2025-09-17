@@ -1,8 +1,126 @@
 import { createTool } from "@mastra/core/tools";
 import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
-import { createCard, getCardsByOwner, getCardById, updateCard, deleteCard } from "../../db/cards.js";
-import type { CreateCardData, UpdateCardData } from "../../db/cards.js";
+import { createCard, getCardsByOwner, getCardById, updateCard, deleteCard, findSimilarCards } from "../../db/cards.js";
+import { DuplicateCardError } from "../../errors/DuplicateCardError.js";
+import type { CreateCardData, UpdateCardData, SimilarCard } from "../../db/cards.js";
+
+const DUPLICATE_SIMILARITY_THRESHOLD = 0.5;
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function formatCardSummary(card: { front: string; back: string; tags?: readonly string[] | string[] | null }): string {
+  const tagsArray = Array.isArray(card.tags) ? Array.from(card.tags) : [];
+  const tagsSegment = tagsArray.length > 0 ? ` <i>#${tagsArray.join(", #")}</i>` : "";
+  return `- <b>${escapeHtml(card.front)}</b> -&gt; ${escapeHtml(card.back)}${tagsSegment}`;
+}
+
+function formatSimilarSection(similar: SimilarCard[], existingId?: string): string {
+  const lines = similar
+    .filter((card) => card.id !== existingId)
+    .slice(0, 5)
+    .map((card) => formatCardSummary(card));
+
+  if (!lines.length) {
+    return "";
+  }
+
+  return `Did you mean one of these?\n${lines.join("\n")}`;
+}
+
+async function buildDuplicateResponse(
+  ownerId: number,
+  probe: string,
+  error: DuplicateCardError,
+) {
+  const existing = error.existingCard;
+  const normalizedProbe = probe.trim();
+  const similar = normalizedProbe
+    ? await findSimilarCards(ownerId, normalizedProbe, { threshold: DUPLICATE_SIMILARITY_THRESHOLD })
+    : [];
+  const similarText = formatSimilarSection(similar, existing?.id);
+
+  let message = "This card already exists ?";
+  if (existing) {
+    message += `\n\n${formatCardSummary(existing)}`;
+  }
+  if (similarText) {
+    message += `\n\n${similarText}`;
+  }
+
+  return {
+    success: false as const,
+    message,
+    duplicate: {
+      existing: existing
+        ? {
+            id: existing.id,
+            front: existing.front,
+            back: existing.back,
+            tags: existing.tags ?? [],
+            example: existing.example ?? undefined,
+          }
+        : undefined,
+      similar: similar
+        .filter((card) => card.id !== existing?.id)
+        .slice(0, 5)
+        .map((card) => ({
+          id: card.id,
+          front: card.front,
+          back: card.back,
+          tags: card.tags ?? [],
+          example: card.example ?? undefined,
+          similarity: card.similarity,
+        })),
+    },
+  };
+}
+
+async function createCardWithDuplicateHandling(
+  logger: IMastraLogger | undefined,
+  payload: CreateCardData,
+  probe: string,
+) {
+  try {
+    const card = await createCard(payload);
+    logger?.info("[AddCard] Card created successfully:", {
+      id: card.id,
+      front: card.front,
+      back: card.back,
+    });
+    const tagsSegment = card.tags.length > 0 ? ` [${card.tags.join(", ")}]` : "";
+    return {
+      success: true as const,
+      card_id: card.id,
+      message: `Card created successfully! ${card.front} -> ${card.back}${tagsSegment}`,
+      card: {
+        id: card.id,
+        front: card.front,
+        back: card.back,
+        tags: card.tags,
+        example: card.example,
+        lang_front: card.lang_front,
+        lang_back: card.lang_back,
+      },
+    };
+  } catch (error) {
+    if (error instanceof DuplicateCardError) {
+      logger?.info("[AddCard] Duplicate detected:", {
+        owner_id: payload.owner_id,
+        front: payload.front,
+        back: payload.back,
+      });
+      return await buildDuplicateResponse(payload.owner_id, probe, error);
+    }
+
+    throw error;
+  }
+}
 
 // Add card tool with guided flow
 export const addCardTool = createTool({
@@ -22,75 +140,86 @@ export const addCardTool = createTool({
     success: z.boolean(),
     card_id: z.string().optional(),
     message: z.string(),
-    card: z.object({
-      id: z.string(),
-      front: z.string(),
-      back: z.string(),
-      tags: z.array(z.string()),
-      example: z.string().optional(),
-      lang_front: z.string(),
-      lang_back: z.string(),
-    }).optional(),
+    card: z
+      .object({
+        id: z.string(),
+        front: z.string(),
+        back: z.string(),
+        tags: z.array(z.string()),
+        example: z.string().optional(),
+        lang_front: z.string(),
+        lang_back: z.string(),
+      })
+      .optional(),
+    duplicate: z
+      .object({
+        existing: z
+          .object({
+            id: z.string(),
+            front: z.string(),
+            back: z.string(),
+            tags: z.array(z.string()),
+            example: z.string().optional(),
+          })
+          .optional(),
+        similar: z
+          .array(
+            z.object({
+              id: z.string(),
+              front: z.string(),
+              back: z.string(),
+              tags: z.array(z.string()),
+              example: z.string().optional(),
+              similarity: z.number(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
   }),
   execute: async ({ context, mastra }) => {
-    const logger = mastra?.getLogger();
-    logger?.info('🔧 [AddCard] Starting card creation with params:', context);
+    const logger = mastra?.getLogger?.() as IMastraLogger | undefined;
+    logger?.info("[AddCard] Starting card creation with params:", context);
 
     try {
-      // Check if input contains quick-add syntax (pipe-separated)
-      if (context.input && context.input.includes('|')) {
-        logger?.info('📝 [AddCard] Parsing quick-add syntax:', { input: context.input });
-        
-        const parts = context.input.split('|').map(p => p.trim());
+      if (context.input && context.input.includes("|")) {
+        logger?.info("[AddCard] Parsing quick-add syntax:", { input: context.input });
+
+        const parts = context.input.split("|").map((part) => part.trim());
         if (parts.length < 2) {
           return {
             success: false,
-            message: "Quick-add format should be: front|back[|tags][|example]. Example: 'hund|dog|animals|Hunden springer snabbt'"
+            message: "Quick-add format should be: front|back[|tags][|example]. Example: 'hund|dog|animals|Hunden springer snabbt'",
           };
         }
 
         const [front, back, tagsStr, example] = parts;
-        const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
+        const tags = tagsStr
+          ? tagsStr.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0)
+          : [];
 
         const cardData: CreateCardData = {
           owner_id: context.owner_id,
           front,
           back,
           tags,
-          example: example || undefined,
+          example: example ? example : undefined,
           lang_front: context.lang_front,
           lang_back: context.lang_back,
         };
 
-        logger?.info('📝 [AddCard] Creating card with parsed data:', cardData);
-        const card = await createCard(cardData);
-
-        logger?.info('✅ [AddCard] Card created successfully:', { id: card.id, front: card.front, back: card.back });
-        return {
-          success: true,
-          card_id: card.id,
-          message: `Card created successfully! ${card.front} → ${card.back}${card.tags.length > 0 ? ` [${card.tags.join(', ')}]` : ''}`,
-          card: {
-            id: card.id,
-            front: card.front,
-            back: card.back,
-            tags: card.tags,
-            example: card.example,
-            lang_front: card.lang_front,
-            lang_back: card.lang_back,
-          }
-        };
+        logger?.info("[AddCard] Creating card with parsed data:", cardData);
+        return await createCardWithDuplicateHandling(logger, cardData, front);
       }
 
-      // Guided flow - use individual fields
       if (!context.front || !context.back) {
         return {
           success: false,
-          message: "Both 'front' and 'back' fields are required. You can also use quick-add syntax: 'front|back|tags|example'"
+          message: "Both 'front' and 'back' fields are required. You can also use quick-add syntax: 'front|back|tags|example'",
         };
       }
 
-      const tags = context.tags ? context.tags.split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
+      const tags = context.tags ? context.tags.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0) : [];
 
       const cardData: CreateCardData = {
         owner_id: context.owner_id,
@@ -102,30 +231,13 @@ export const addCardTool = createTool({
         lang_back: context.lang_back,
       };
 
-      logger?.info('📝 [AddCard] Creating card with guided data:', cardData);
-      const card = await createCard(cardData);
-
-      logger?.info('✅ [AddCard] Card created successfully:', { id: card.id, front: card.front, back: card.back });
-      return {
-        success: true,
-        card_id: card.id,
-        message: `Card created successfully! ${card.front} → ${card.back}${card.tags.length > 0 ? ` [${card.tags.join(', ')}]` : ''}`,
-        card: {
-          id: card.id,
-          front: card.front,
-          back: card.back,
-          tags: card.tags,
-          example: card.example,
-          lang_front: card.lang_front,
-          lang_back: card.lang_back,
-        }
-      };
-
+      logger?.info("[AddCard] Creating card with guided data:", cardData);
+      return await createCardWithDuplicateHandling(logger, cardData, context.front);
     } catch (error) {
-      logger?.error('❌ [AddCard] Error creating card:', error);
+      logger?.error("[AddCard] Error creating card:", error);
       return {
         success: false,
-        message: `Error creating card: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Error creating card: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   },
