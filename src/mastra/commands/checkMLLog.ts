@@ -124,7 +124,7 @@ function extractUserIdFromSession(sessionId: string): string | null {
 
 function formatEvent(event: ReviewEventSample): string {
   const segments: string[] = [];
-  segments.push(`- ${formatTimestamp(event.ts)} UTC`);
+  segments.push(`${formatTimestamp(event.ts)} UTC`);
   segments.push(`card ${event.card_id}`);
 
   const userId = extractUserIdFromSession(event.session_id);
@@ -148,7 +148,7 @@ function formatEvent(event: ReviewEventSample): string {
   return segments.join(" | ");
 }
 
-function buildScopeLine(options: ParsedOptions): string {
+function buildScopeValue(options: ParsedOptions): string {
   const scope = options.userId ? `user ${options.userId}` : "all users";
   const extras: string[] = [];
   if (options.mode) {
@@ -160,9 +160,15 @@ function buildScopeLine(options: ParsedOptions): string {
   if (options.client) {
     extras.push(`client=${options.client}`);
   }
-  return extras.length > 0
-    ? `Scope: ${scope} (${extras.join(", ")})`
-    : `Scope: ${scope}`;
+  return extras.length > 0 ? `${scope} (${extras.join(", ")})` : scope;
+}
+
+function formatSummaryRows(rows: Array<[string, string]>): string[] {
+  const labelWidth = rows.reduce(
+    (max, [label]) => Math.max(max, label.length),
+    0,
+  );
+  return rows.map(([label, value]) => `${label.padEnd(labelWidth, " ")} │ ${value}`);
 }
 
 export default async function handleCheckMlLogCommand(
@@ -217,26 +223,31 @@ export default async function handleCheckMlLogCommand(
     ]);
 
     const lines: string[] = [];
-    lines.push("ML Review Events");
-    lines.push(buildScopeLine(options));
-    lines.push(`Limit: ${options.limit}`);
-    lines.push(`Total events in scope: ${totalEvents}`);
-    lines.push(`Logging enabled: ${envEnabled ? "yes" : "no"}`);
-    lines.push(`Hash salt configured: ${hashSaltConfigured ? "yes" : "no"}`);
+    lines.push("📑 ML Log Report");
+    lines.push("────────────────────────────");
+    const summaryRows = formatSummaryRows([
+      ["Scope", buildScopeValue(options)],
+      ["Events", String(totalEvents)],
+      ["Limit", String(options.limit)],
+      ["Logging", envEnabled ? "✅ yes" : "❌ no"],
+      ["Hash Salt", hashSaltConfigured ? "✅ yes" : "❌ no"],
+    ]);
+    lines.push(...summaryRows);
+    lines.push("────────────────────────────");
 
     if (warnings.length > 0) {
-      lines.push(...warnings);
+      for (const warning of warnings) {
+        lines.push(`⚠️ ${warning}`);
+      }
     }
 
-    lines.push("");
-
     if (events.length === 0) {
-      lines.push("No events found for this scope.");
+      lines.push("🔎 No events recorded for this scope");
     } else {
       const plural = events.length === 1 ? "event" : "events";
-      lines.push(`Most recent ${events.length} ${plural}:`);
+      lines.push(`📝 Most recent ${events.length} ${plural}`);
       for (const event of events) {
-        lines.push(formatEvent(event));
+        lines.push(`• ${formatEvent(event)}`);
       }
     }
 
