@@ -38,6 +38,13 @@ function extractPre(response: string): string {
     .replace(/&amp;/g, "&");
 }
 
+function expectSummaryRow(lines: string[], label: string, expectedValue: string) {
+  const row = lines.find((line) => line.startsWith(label));
+  expect(row, `Expected summary row for ${label}`).toBeDefined();
+  const [, value] = row!.split("│");
+  expect(value?.trim()).toBe(expectedValue);
+}
+
 describe("/check_ml_log command", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -99,12 +106,16 @@ describe("/check_ml_log command", () => {
 
     expect(result.parse_mode).toBe("HTML");
     const body = extractPre(result.response);
-    expect(body).toContain("ML Review Events");
-    expect(body).toContain("Scope: user 9001");
-    expect(body).toContain("Limit: 2");
-    expect(body).toContain("Total events in scope: 11");
-    expect(body).toContain("Most recent 2 events:");
-    expect(body).toContain("- 2025-09-01 10:00 UTC");
+    const lines = body.split("\n");
+    expect(lines[0]).toBe("📑 ML Log Report");
+    expect(lines[1]).toBe("────────────────────────────");
+    expectSummaryRow(lines, "Scope", "user 9001");
+    expectSummaryRow(lines, "Events", "11");
+    expectSummaryRow(lines, "Limit", "2");
+    expectSummaryRow(lines, "Logging", "✅ yes");
+    expectSummaryRow(lines, "Hash Salt", "✅ yes");
+    expect(lines).toContain("📝 Most recent 2 events");
+    expect(body).toContain("• 2025-09-01 10:00 UTC");
     expect(body).toContain("card card-1");
     expect(body).toContain("user 9001");
     expect(body).toContain("latency 1200ms");
@@ -145,12 +156,13 @@ describe("/check_ml_log command", () => {
     });
 
     const body = extractPre(result.response);
-    expect(body).toContain("Scope: all users");
-    expect(body).toContain("Limit: 5");
-    expect(body).toContain("Total events in scope: 0");
-    expect(body).toContain("Logging enabled: no");
-    expect(body).toContain("Hash salt configured: no");
-    expect(body).toContain("No events found for this scope.");
+    const lines = body.split("\n");
+    expectSummaryRow(lines, "Scope", "all users");
+    expectSummaryRow(lines, "Events", "0");
+    expectSummaryRow(lines, "Limit", "5");
+    expectSummaryRow(lines, "Logging", "❌ no");
+    expectSummaryRow(lines, "Hash Salt", "❌ no");
+    expect(lines).toContain("🔎 No events recorded for this scope");
 
     expect(info).toHaveBeenCalledWith(
       "check_ml_log_summary",

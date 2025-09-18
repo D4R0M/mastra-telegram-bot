@@ -36,6 +36,13 @@ const logger = {
   error: vi.fn(),
 };
 
+function expectSummaryRow(lines: string[], label: string, expectedValue: string) {
+  const row = lines.find((line) => line.startsWith(label));
+  expect(row, `Expected summary row for ${label}`).toBeDefined();
+  const [, value] = row!.split("│");
+  expect(value?.trim()).toBe(expectedValue);
+}
+
 describe("check_ml_log command", () => {
   it("returns formatted output", async () => {
     const result = await handleCheckMlLogCommand([], "user:42", "42", undefined, {
@@ -50,10 +57,14 @@ describe("check_ml_log command", () => {
       .replace(/&gt;/g, ">")
       .replace(/&amp;/g, "&");
 
-    expect(text).toContain("ML Review Events");
-    expect(text).toContain("Scope: user 42");
-    expect(text).toContain("Total events in scope: 12");
-    expect(text).toContain("Most recent 1 event:");
+    const lines = text.split("\n");
+    expect(lines[0]).toBe("📑 ML Log Report");
+    expectSummaryRow(lines, "Scope", "user 42");
+    expectSummaryRow(lines, "Events", "12");
+    expectSummaryRow(lines, "Limit", "5");
+    expectSummaryRow(lines, "Logging", "✅ yes");
+    expectSummaryRow(lines, "Hash Salt", "✅ yes");
+    expect(lines).toContain("📝 Most recent 1 event");
     expect(text).toContain("card card-1");
     expect(text).toContain("user 42");
   });
