@@ -28,8 +28,8 @@ vi.mock("../src/mastra/tools/statisticsTools.ts", () => ({
 describe("due command", () => {
   it("renders dashboard with inline actions", async () => {
     const res = await handleDueCommand([], "", "user");
-    expect(res.response).toContain("Cards Due for Review");
-    expect(res.response).toContain("Total: 15");
+    expect(res.response).toContain("Review Dashboard");
+    expect(res.response).toContain("Total: <b>15</b>");
     expect(res.inline_keyboard).toBeTruthy();
   });
 
