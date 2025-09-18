@@ -37,25 +37,43 @@ function normalizeStats(raw: RawDueStats | undefined): DueStats {
   };
 }
 
+const formatNumber = (value: number): string =>
+  new Intl.NumberFormat("en-US").format(value);
+
+const emphasizeValue = (value: number): string => `<b>${formatNumber(value)}</b>`;
+
+const formatOverdueLine = (value: number): string => {
+  const icon = value > 0 ? "🔥" : "✅";
+  const label = value > 0 ? "Overdue" : "Overdue cleared";
+  return `• ${label}: ${emphasizeValue(value)} ${icon}`.trim();
+};
+
 function formatDashboard(stats: DueStats): string {
-  return [
-    "<b>Cards Due for Review</b>",
+  const newCardsIcon = stats.new_cards > 0 ? "✨" : "📦";
+  const learningIcon = stats.learning_cards > 0 ? "📘" : "📗";
+  const reviewIcon = stats.review_cards > 0 ? "🧠" : "🫙";
+
+  const lines = [
+    "📚 <b>Review Dashboard</b>",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "<b>📅 Schedule</b>",
+    `• Today: ${emphasizeValue(stats.cards_due_today)}`,
+    `• Tomorrow: ${emphasizeValue(stats.cards_due_tomorrow)}`,
+    formatOverdueLine(stats.overdue_cards),
     "",
-    `Total: ${stats.total_cards}`,
-    `Today: ${stats.cards_due_today}`,
-    `Tomorrow: ${stats.cards_due_tomorrow}`,
-    `New: ${stats.new_cards}`,
+    "<b>🗂️ Card Types</b>",
+    `• Total: ${emphasizeValue(stats.total_cards)}`,
+    `• ${newCardsIcon} New ready: ${emphasizeValue(stats.new_cards)}`,
+    `• ${learningIcon} Learning: ${emphasizeValue(stats.learning_cards)}`,
+    `• ${reviewIcon} Review: ${emphasizeValue(stats.review_cards)}`,
     "",
-    `Learning: ${stats.learning_cards}`,
-    `Review: ${stats.review_cards}`,
-    `Overdue: ${stats.overdue_cards}`,
+    "<b>🏁 Progress</b>",
+    `• Reviews logged today: ${emphasizeValue(stats.total_reviews)}`,
     "",
-    `Reviews done today: ${stats.total_reviews}`,
-    "",
-    "→ /practice",
-    "→ /stats",
-    "→ /add",
-  ].join("\n");
+    "<i>Tip: Tap a shortcut below to jump back into practice.</i>",
+  ];
+
+  return lines.join("\n");
 }
 
 function formatCompact(stats: DueStats): string {
@@ -121,14 +139,14 @@ export default async function handleDueCommand(
       inline_keyboard: {
         inline_keyboard: [
           [
-            { text: "Start practice", callback_data: "practice_now" },
-            { text: "Add card", callback_data: "add_card" },
-            { text: "Export", callback_data: "export:cards" },
+            { text: "⚡ Practice now", callback_data: "practice_now" },
+            { text: "➕ Add card", callback_data: "add_card" },
+            { text: "📤 Export", callback_data: "export:cards" },
           ],
           [
-            { text: "Only learning", callback_data: "practice_learning" },
-            { text: "Only new", callback_data: "practice_new" },
-            { text: "Overdue", callback_data: "practice_overdue" },
+            { text: "📘 Learning", callback_data: "practice_learning" },
+            { text: "🆕 New", callback_data: "practice_new" },
+            { text: "🔥 Overdue", callback_data: "practice_overdue" },
           ],
         ],
       },
